@@ -1,2 +1,3 @@
 # gevo
-Concurrent evolution "game", computed and visualized concurrently in Go
+#### _go + evo_
+Evolution "game", computed and visualized concurrently in Go
