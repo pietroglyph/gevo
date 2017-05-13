@@ -1,19 +1,12 @@
 package main
 
-import (
-	"log"
-
-	tl "github.com/JoelOtter/termloop"
-)
+import "engo.io/engo"
 
 func main() {
-	log.Println("Starting gevo...")
-	game := tl.NewGame()
-	level := tl.NewBaseLevel(tl.Cell{
-		Bg: tl.ColorBlue,
-		Fg: tl.ColorWhite,
-		Ch: '☐',
-	})
-	game.Screen().SetLevel(level)
-	game.Start()
+	opts := engo.RunOptions{
+		Title:  "gevo",
+		Width:  1920,
+		Height: 1080,
+	}
+	engo.Run(opts, &menuScene{})
 }
