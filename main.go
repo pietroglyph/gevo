@@ -8,5 +8,5 @@ func main() {
 		Width:  1920,
 		Height: 1080,
 	}
-	engo.Run(opts, &menuScene{})
+	engo.Run(opts, &mapScene{})
 }
