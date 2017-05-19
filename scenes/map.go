@@ -1,4 +1,4 @@
-package main
+package scenes
 
 import (
 	"image/color"
@@ -8,7 +8,8 @@ import (
 	"engo.io/engo/common"
 )
 
-type mapScene struct{}
+// MapScene satisfies the Scene interface
+type MapScene struct{}
 
 type label struct {
 	ecs.BasicEntity
@@ -26,23 +27,24 @@ type tile struct {
 var err error
 
 // Type uniquely defines your game type
-func (*mapScene) Type() string { return "map" }
+func (*MapScene) Type() string { return "map" }
 
 // Preload is called before loading any assets from the disk,
 // to allow you to register / queue them
-func (*mapScene) Preload() {
+func (*MapScene) Preload() {
 	err = engo.Files.Load("AROLY.ttf") // Load the font for the game title label
 	if err != nil {
 		panic(err)
 	}
-	if err := engo.Files.Load("world.tmx"); err != nil { // Load a tilemap for creatures to live on
+	engo.Files.Load("world.tmx")
+	if err != nil { // Load a tilemap for creatures to live on
 		panic(err)
 	}
 }
 
 // Setup is called before the main loop starts. It allows you
 // to add entities and systems to your Scene.
-func (*mapScene) Setup(world *ecs.World) {
+func (*MapScene) Setup(world *ecs.World) {
 	common.SetBackground(color.RGBA{0, 168, 0, 1})
 	world.AddSystem(&common.RenderSystem{})
 
@@ -80,7 +82,7 @@ func (*mapScene) Setup(world *ecs.World) {
 				tile := &tile{BasicEntity: ecs.NewBasic()}
 				tile.RenderComponent = common.RenderComponent{
 					Drawable: tileElement,
-					Scale:    engo.Point{1, 1},
+					Scale:    engo.Point{X: 1, Y: 1},
 				}
 				tile.SpaceComponent = common.SpaceComponent{
 					Position: tileElement.Point,
@@ -100,7 +102,7 @@ func (*mapScene) Setup(world *ecs.World) {
 				tile := &tile{BasicEntity: ecs.NewBasic()}
 				tile.RenderComponent = common.RenderComponent{
 					Drawable: imageElement,
-					Scale:    engo.Point{1, 1},
+					Scale:    engo.Point{X: 1, Y: 1},
 				}
 				tile.SpaceComponent = common.SpaceComponent{
 					Position: imageElement.Point,

@@ -1,6 +1,10 @@
 package main
 
-import "engo.io/engo"
+import (
+	"github.com/pietroglyph/gevo/scenes"
+
+	"engo.io/engo"
+)
 
 func main() {
 	opts := engo.RunOptions{
@@ -8,5 +12,5 @@ func main() {
 		Width:  1920,
 		Height: 1080,
 	}
-	engo.Run(opts, &mapScene{})
+	engo.Run(opts, &scenes.MapScene{})
 }
