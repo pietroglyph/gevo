@@ -36,7 +36,7 @@ func (*MapScene) Preload() {
 	if err != nil {
 		panic(err)
 	}
-	engo.Files.Load("world.tmx")
+	err = engo.Files.Load("world.tmx")
 	if err != nil { // Load a tilemap for creatures to live on
 		panic(err)
 	}
