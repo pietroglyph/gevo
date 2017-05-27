@@ -127,9 +127,10 @@ func (*MapScene) Setup(world *ecs.World) {
 							for _, t := range layer.Tiles {
 								// We do all this to find an int representing the distance from a water tile to a food tile
 								// We're basically normalizing a vector
-								p := util.SubtractPoints(t.Point, tileElement.Point)    // Point
-								dist := math.Abs(float64(p.X)) + math.Abs(float64(p.Y)) // Float64
-								if dist <= minDistance || minDistance == 0.0 {          // Is this closer than any other tiles we've seen
+								p := util.SubtractPoints(t.Point, tileElement.Point)          // Point
+								dist := math.Abs(float64(p.X/32)) + math.Abs(float64(p.Y/32)) // Float64
+								// FIXME: 32 should be from t.Height() or t.Width() but those cause a segfault, why?
+								if dist <= minDistance || minDistance == 0.0 { // Check if this is closer than any other tiles we've seen
 									minDistance = dist
 								}
 								if minDistance == 1 { // The distance isn't going to be smaller than 1 so we can stop
