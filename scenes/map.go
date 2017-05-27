@@ -1,11 +1,15 @@
 package scenes
 
 import (
+	"fmt"
 	"image/color"
+	"log"
+	"math"
 
 	"engo.io/ecs"
 	"engo.io/engo"
 	"engo.io/engo/common"
+	"github.com/pietroglyph/gevo/util"
 )
 
 // MapScene satisfies the Scene interface
@@ -23,21 +27,23 @@ type tileEntity struct {
 	ecs.BasicEntity
 	common.RenderComponent
 	common.SpaceComponent
-	data tileData
+	common.CollisionComponent
+	foodComponent
 }
 
-// TileData provides an interface that gives all the information we need about tile
-type tileData interface {
-	getFood() int
-	isSolid() bool
-	getColorTransform() color.RGBA
+// TileComponent holds all the tile's information relating to food
+type foodComponent struct {
+	waterDistance float64 // The distance in horizontal or vertical tiles from the current tile to a water tile (is 0 for water tiles)
+	foodStored    float64 // Maxes out at (1/waterDistance) * worldFertility, and goes lower when creature eats this tile
+	deadly        bool    // Should creatures lose food when on this tile
 }
 
 var err error
 
 var (
-	scrollSpeed float32 = 700
-	zoomSpeed   float32 = -0.1
+	scrollSpeed    float32 = 700.0
+	zoomSpeed      float32 = -0.1
+	worldFertility float64 = 4.0
 )
 
 // Type uniquely defines your game type
@@ -64,6 +70,7 @@ func (*MapScene) Setup(world *ecs.World) {
 	world.AddSystem(&common.RenderSystem{})                                                                        // Render the game
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
 	world.AddSystem(&common.MouseZoomer{zoomSpeed})                                                                // Use the scrollwheel to zoom in and out
+	world.AddSystem(&common.CollisionSystem{})
 
 	arolyFont := &common.Font{
 		URL:  "AROLY.ttf",
@@ -90,12 +97,58 @@ func (*MapScene) Setup(world *ecs.World) {
 	levelData := tmxResource.Level
 
 	// Create render and space components for each of the tiles in all layers
-	tileComponents := make([]*tile, 0)
+	tileComponents := make([]*tileEntity, 0)
 
+	// Add all the actual tiles
 	for _, tileLayer := range levelData.TileLayers {
 		for _, tileElement := range tileLayer.Tiles {
 			if tileElement.Image != nil {
-				tile := &tile{BasicEntity: ecs.NewBasic(), food: 4} // FIXME: Find a way to figure out the type of tile, and give it an actual food value
+				tile := &tileEntity{BasicEntity: ecs.NewBasic()}
+
+				switch tileLayer.Name {
+				case "Collision Layer":
+					tile.RenderComponent.SetZIndex(3)    // Highest Z-Index, everything will pass under it
+					tile.foodComponent.foodStored = 0    // We can't eat this
+					tile.foodComponent.waterDistance = 0 // This value doesn't really matter for this layer
+					tile.foodComponent.deadly = false    // Creatures should collide with this tile, so this doesn't really matter
+					tile.CollisionComponent = common.CollisionComponent{Solid: true}
+				case "Water Layer":
+					tile.RenderComponent.SetZIndex(1) // Functionally the same as Z-Index 0 because all creatures are Z-index 2
+					tile.foodComponent.foodStored = 0 // We can't eat this
+					tile.foodComponent.deadly = true  // Creatures will drown here
+					tile.foodComponent.waterDistance = 0
+					tile.CollisionComponent = common.CollisionComponent{Solid: false}
+				case "Food Layer":
+					tile.RenderComponent.SetZIndex(0) // Lowest Z-Index but functionally the same as Z-Index 1
+					// Loop over the the Water Layer and find the closest water tiles (not dependent on Water Layer entities existing)
+					for _, layer := range levelData.TileLayers {
+						if layer.Name == "Water Layer" {
+							var minDistance float64
+							for _, t := range layer.Tiles {
+								// We do all this to find an int representing the distance from a water tile to a food tile
+								// We're basically normalizing a vector
+								p := util.SubtractPoints(t.Point, tileElement.Point)    // Point
+								dist := math.Abs(float64(p.X)) + math.Abs(float64(p.Y)) // Float64
+								if dist <= minDistance || minDistance == 0.0 {          // Is this closer than any other tiles we've seen
+									minDistance = dist
+								}
+								if minDistance == 1 { // The distance isn't going to be smaller than 1 so we can stop
+									break
+								}
+							}
+							// Actually set the values we've caluclated
+							tile.foodComponent.waterDistance = minDistance
+							tile.foodComponent.foodStored = (1 / minDistance) * worldFertility
+						}
+					}
+					if tile.foodComponent.waterDistance == 0.0 { // This shouldn't happen unless the tilemap is screwed up
+						panic(fmt.Errorf("No Water Layer in tilemap!"))
+					}
+					tile.foodComponent.deadly = false // Food certainly isn't deadly
+					tile.CollisionComponent = common.CollisionComponent{Solid: false}
+					log.Println(tile.foodComponent)
+				}
+
 				tile.RenderComponent = common.RenderComponent{
 					Drawable: tileElement,
 					Scale:    engo.Point{X: 1, Y: 1},
@@ -115,7 +168,7 @@ func (*MapScene) Setup(world *ecs.World) {
 	for _, imageLayer := range levelData.ImageLayers {
 		for _, imageElement := range imageLayer.Images {
 			if imageElement.Image != nil {
-				tile := &tile{BasicEntity: ecs.NewBasic()}
+				tile := &tileEntity{BasicEntity: ecs.NewBasic()}
 				tile.RenderComponent = common.RenderComponent{
 					Drawable: imageElement,
 					Scale:    engo.Point{X: 1, Y: 1},
