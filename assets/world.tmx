@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.0.0" orientation="orthogonal" renderorder="right-down" width="50" height="50" tilewidth="32" tileheight="32" nextobjectid="1">
- <tileset firstgid="1" name="ts1" tilewidth="32" tileheight="32" tilecount="2" columns="0">
+<map version="1.0.0" orientation="orthogonal" renderorder="right-down" width="52" height="52" tilewidth="32" tileheight="32" nextobjectid="1">
+ <tileset firstgid="1" name="ts1" tilewidth="32" tileheight="32" tilecount="3" columns="3">
   <grid orientation="orthogonal" width="1" height="1"/>
-  <tile id="0">
-   <image width="32" height="32" source="tile.png"/>
-  </tile>
-  <tile id="1">
-   <image width="32" height="32" source="water_tile.png"/>
-  </tile>
+  <image source="fulltiles.png" width="96" height="32"/>
  </tileset>
- <layer name="Tile Layer 1" width="50" height="50" offsetx="-16" offsety="-54.6667">
+ <layer name="Collision Layer" width="52" height="52">
   <data encoding="base64" compression="zlib">
-   eJzd1VECgCAIA1Dt/ofuAiXgBkM/+ipxT8WeMcbT5JnAE6nT1TA363R1oPuoNnRwMAyIw2uxvlM7vrKsMrItX3Mje+DxefYOzRCpga4jy4I4mOcasax6sNKAWFbfWrmy7xivxfpmlS0rv9ey66w2IJ6d8dmGqGVnbJUBXddOBiRTp/xMh9qwckTGqA0Mhzo/w6HObjk8Y9S5LUdG/Z08kffZ92e07irLX9aK/xjqQJ4bHBm9sftP6mK42XGT5dQemcHanR3oWfzL1tmEZOmyf4w51OeRWVvZX+yaN1lUfZPdh9X9or5X2HMp94e5XtnzVTuyzoHCkGFROjwWbxa1g2VR9UfUYeWpunezLazzeYLjBMsLXuANPA==
+   eJztzwEJADAQxLCH+fc8G+FooAL67u6NtaIfWz+2fmz92Pqx9WPrx9aPrR9bP7Z+bP3Y+rH1Y+vH1o+tH1s/tn5s/dj6sfVj68fWj231Z6kPsnYCZQ==
+  </data>
+ </layer>
+ <layer name="Water Layer" width="52" height="52">
+  <data encoding="base64" compression="zlib">
+   eJzdlUsOxCAMQ6u5/6FHs6g0ixaS2A4GS2zafPwopNd1nj5Gi82TiXVk+fdYyXHlqea5sdy+qnluLLcvJDfidweeJ08jr2ymt1x0Fozej/IQptm+MepU8qv1GDzMc48wzXIqNRiqMEViZ/6UMynDFPUReaearU89oitSb9RHLQUPY5YiQlkiNbql5FklxJMTxy0mj4OQ83Iyj4sYPE5C7rQby09ddyBbO/ovf3qm5mHOmTfPnf9BlAdZCq3iUSnTx53lyWMmdgeeE5my8c5MmVhnnowyHndgQzxVv6GKnbG/KA+Li3leGDwoF7smi8eJaVY30le1pwx180TqK6RkifZhymn/dqhf6auYQx3qnENdYs+j1TwjDxU/q+5P1EPWT9e8Rn1E/bDPb1WdPLsxnaIvEioG7w==
+  </data>
+ </layer>
+ <layer name="Food Layer" width="52" height="52">
+  <data encoding="base64" compression="zlib">
+   eJzt09kRwzAIBFCn/6bTgIyAXVgsm5l8RRxPwtf1RWX8gF+mXmUgltVs6F1M8rDeV2WZ5GFYGB6vaXduimeVb83KNlm9kTfx3tMu0BkytZAZmCaGB7Wwdu8uB6mBWBCTddY7X6RfpWl3xjNjlcNrsqLCq3Qh+dWW6EzsXLWJmac2MXOe6FFbsrO9waN2MD1qA3rXUy3Zu85YMuetnNX/q6jwZOtHZr6LiR4kTvKwdjuyP2rL54n36zZFz0ffqNuU8UTznuBB3tOaEbUpPV1vO8Wi2FfWnnWZMr0rPKea1N9VlYfhmvItMXwd/bo8zPurdqk83v7qemrTBA9zT6Z4WCZGjU7Pbh5GjUmmSJzmeYLpxPgDomUGTg==
   </data>
  </layer>
 </map>

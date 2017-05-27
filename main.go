@@ -8,9 +8,11 @@ import (
 
 func main() {
 	opts := engo.RunOptions{
-		Title:  "gevo",
-		Width:  1920,
-		Height: 1080,
+		Title:          "gevo",
+		Width:          1600,
+		Height:         1600,
+		StandardInputs: true,
+		MSAA:           0,
 	}
 	engo.Run(opts, &scenes.MapScene{})
 }
