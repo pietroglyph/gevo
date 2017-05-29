@@ -64,7 +64,7 @@ func (*MapScene) Preload() {
 // to add entities and systems to your Scene.
 func (*MapScene) Setup(world *ecs.World) {
 	// Set the background color to green
-	common.SetBackground(color.Black)
+	common.SetBackground(color.White)
 
 	// Systems to make stuff actually happen in the world
 	world.AddSystem(&common.RenderSystem{})                                                                        // Render the game
@@ -127,9 +127,9 @@ func (*MapScene) Setup(world *ecs.World) {
 							for _, t := range layer.Tiles {
 								// We do all this to find an int representing the distance from a water tile to a food tile
 								// We're basically normalizing a vector
-								p := util.SubtractPoints(t.Point, tileElement.Point)          // Point
-								dist := math.Abs(float64(p.X/32)) + math.Abs(float64(p.Y/32)) // Float64
-								// FIXME: 32 should be from t.Height() or t.Width() but those cause a segfault, why?
+								p := util.SubtractPoints(t.Point, tileElement.Point)                                             // Point
+								dist := math.Abs(float64(p.X/tileElement.Width())) + math.Abs(float64(p.Y/tileElement.Height())) // Float64
+								// FIXME: Using t instead of tileElement causes a segfault, so we use tileElement instead... This could screw up if layers have different tile sizes
 								if dist <= minDistance || minDistance == 0.0 { // Check if this is closer than any other tiles we've seen
 									minDistance = dist
 								}
@@ -154,6 +154,13 @@ func (*MapScene) Setup(world *ecs.World) {
 					Drawable: tileElement,
 					Scale:    engo.Point{X: 1, Y: 1},
 				}
+
+				// Make the food tiles varying shades of green, based upon their foodStored
+				if tileLayer.Name == "Food Layer" {
+					mod := uint8((tile.foodComponent.foodStored / worldFertility) * 200)
+					tile.RenderComponent.Color = color.RGBA{0, mod, 0, 255}
+				}
+
 				tile.SpaceComponent = common.SpaceComponent{
 					Position: tileElement.Point,
 					Width:    tileElement.Width(),
