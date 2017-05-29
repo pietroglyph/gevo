@@ -9,6 +9,7 @@ import (
 	"engo.io/ecs"
 	"engo.io/engo"
 	"engo.io/engo/common"
+	"github.com/pietroglyph/gevo/systems"
 	"github.com/pietroglyph/gevo/util"
 )
 
@@ -63,6 +64,7 @@ func (*MapScene) Preload() {
 // Setup is called before the main loop starts. It allows you
 // to add entities and systems to your Scene.
 func (*MapScene) Setup(world *ecs.World) {
+	log.Println("Preloading map scene.")
 	// Set the background color to green
 	common.SetBackground(color.White)
 
@@ -70,8 +72,8 @@ func (*MapScene) Setup(world *ecs.World) {
 	world.AddSystem(&common.RenderSystem{})                                                                        // Render the game
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
 	world.AddSystem(&common.MouseZoomer{zoomSpeed})                                                                // Use the scrollwheel to zoom in and out
-	world.AddSystem(&common.CollisionSystem{})
-
+	world.AddSystem(&common.CollisionSystem{})                                                                     // Collide with stuff
+	world.AddSystem(&systems.CreatureManagerSystem{MinCreatures: 60})                                              // Add and manage creatures
 	arolyFont := &common.Font{
 		URL:  "AROLY.ttf",
 		FG:   color.White,
@@ -147,7 +149,6 @@ func (*MapScene) Setup(world *ecs.World) {
 					}
 					tile.foodComponent.deadly = false // Food certainly isn't deadly
 					tile.CollisionComponent = common.CollisionComponent{Solid: false}
-					log.Println(tile.foodComponent)
 				}
 
 				tile.RenderComponent = common.RenderComponent{
@@ -198,6 +199,10 @@ func (*MapScene) Setup(world *ecs.World) {
 			sys.Add(&titleLabel.BasicEntity, &titleLabel.RenderComponent, &titleLabel.SpaceComponent) // Add the game title label
 			for _, v := range tileComponents {                                                        // Add all of the tiles/imageLayers
 				sys.Add(&v.BasicEntity, &v.RenderComponent, &v.SpaceComponent)
+			}
+		case *common.CollisionSystem:
+			for _, v := range tileComponents {
+				sys.Add(&v.BasicEntity, &v.CollisionComponent, &v.SpaceComponent)
 			}
 		}
 	}

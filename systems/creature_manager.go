@@ -57,7 +57,7 @@ type BrainComponent struct {
 // Ceature manager system satisfies interface ecs.System
 type CreatureManagerSystem struct {
 	// Creatures is a Creature slice containing all the creatures in the world that should be managed
-	Creatures []Creature
+	Creatures []*Creature
 	// MinCreatures is an integer that represents the number of creatures we should have to stop spawning in new ones
 	MinCreatures int
 
@@ -66,14 +66,20 @@ type CreatureManagerSystem struct {
 
 func (*CreatureManagerSystem) Remove(ecs.BasicEntity) {}
 
-func (*CreatureManagerSystem) Update(dt float32) {}
+func (cm *CreatureManagerSystem) Update(dt float32) {
+	if len(cm.Creatures) < cm.MinCreatures {
+		for len(cm.Creatures) < cm.MinCreatures {
+			cm.spawnCreature()
+		}
+	}
+}
 
 func (cm *CreatureManagerSystem) New(world *ecs.World) {
 	cm.world = world
 	log.Println("CreatureManagerSystem was added to the scene.")
 }
 
-func spawnCreature(pos engo.Point) {
+func (cm *CreatureManagerSystem) spawnCreature() {
 	creature := &Creature{BasicEntity: ecs.NewBasic()}
 
 	// Make BrainComponent maps
@@ -81,35 +87,67 @@ func spawnCreature(pos engo.Point) {
 	creature.BrainComponent.Output = make(map[string]Axon)
 
 	// Initalize select inputs
-	creature.BrainComponent.Input["food"].Value = float64(8.0)
-	creature.BrainComponent.Input["const"].Value = float64(1.0)
+	creature.BrainComponent.Input["food"] = Neuron{Value: float32(8.0)}
+	creature.BrainComponent.Input["const"] = Neuron{Value: float32(1.0)}
+
+	// We don't touch value because that gets set after spawning
 
 	// Outputs
-	// We don't touch value because that gets set after spawning
 	for i := range networkOutputs {
-		creature.BrainComponent.Output[networkOutputs[i]].Weight = rand.Float32()
+		creature.BrainComponent.Output[networkOutputs[i]] = Axon{Weight: rand.Float32()}
 	}
 
-	// HiddenLayer
+	// HiddenLayer (we do > because slices have 0 as an index)
 	for i := 0; i > hiddenLayerCount; i++ {
-		creature.BrainComponent.HiddenLayer[i].Weight = rand.Float32()
+		creature.BrainComponent.HiddenLayer[i] = Axon{Weight: rand.Float32()}
 	}
 
 	// For adding a const neuron
 	hiddenLayerCount++
 
-	creature.BrainComponent.HiddenLayer[hiddenLayerCount] = 1 // Const neuron
+	// Const neuron
+	creature.BrainComponent.HiddenLayer = append(creature.BrainComponent.HiddenLayer, Axon{Weight: 1, Value: 0})
 
+	// Make creature size based on amount of stored food (will get updated when food changes)
 	creature.SpaceComponent = common.SpaceComponent{
-		Position: engo.Point{X: rand.Float32() * engo.CanvasWidth(), Y: rand.Float32 * engo.CanvasHeight()},
-		Width:    creature.BrainComponent.food * 5,
-		Height:   creature.BrainComonent.food * 5,
+		Position: engo.Point{X: rand.Float32() * functionalBounds().X, Y: rand.Float32() * functionalBounds().Y},
+		Width:    creature.BrainComponent.Input["food"].Value * 5,
+		Height:   creature.BrainComponent.Input["food"].Value * 5,
 	}
 
+	// Creatures should look like red circles
 	creature.RenderComponent = common.RenderComponent{
 		Drawable: common.Circle{},
 		Scale:    engo.Point{X: 1, Y: 1},
-		ZIndex:   2, // Z-Index 2 is reserved for Creatures
 		Color:    color.RGBA{255, 0, 0, 255},
 	}
+
+	// Make the creatures collide with the tiles and other creatures
+	creature.CollisionComponent = common.CollisionComponent{Solid: false}
+
+	creature.SetZIndex(2) // Z-Index 2 is reserved for creatures
+
+	// Append the creature to the Creatures slice so the System tracks it
+	cm.Creatures = append(cm.Creatures, creature)
+
+	for _, system := range cm.world.Systems() {
+		switch sys := system.(type) {
+		case *common.RenderSystem:
+			sys.Add(&creature.BasicEntity, &creature.RenderComponent, &creature.SpaceComponent)
+		case *common.CollisionSystem:
+			sys.Add(&creature.BasicEntity, &creature.CollisionComponent, &creature.SpaceComponent)
+		}
+	}
+
+	log.Println("Creature added.")
+}
+
+func functionalBounds() engo.Point {
+	tmxRawResource, err := engo.Files.Resource("world.tmx")
+	if err != nil {
+		panic(err)
+	}
+	tmxResource := tmxRawResource.(common.TMXResource)
+	levelData := tmxResource.Level
+	return engo.Point{X: float32(levelData.Width() * levelData.TileWidth), Y: float32(levelData.Height() * levelData.TileHeight)}
 }
