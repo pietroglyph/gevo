@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	networkInputs        = []string{"angle", "velocity", "foodstored", "const"}
-	networkOutputs       = []string{"velocitydelta", "angledelta", "eat", "mate"}
-	hiddenLayerCount int = len(networkInputs) + len(networkOutputs)
+	networkInputs                  = []string{"angle", "velocity", "foodstored", "const"}
+	networkOutputs                 = []string{"velocitydelta", "angledelta", "eat", "mate"}
+	hiddenLayerCount       int     = len(networkInputs) + len(networkOutputs)
+	creatureSizeMultiplier float32 = 5.0
 )
 
 // Creature is an entity upon which evolution is simulated
@@ -108,11 +109,23 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	// Const neuron
 	creature.BrainComponent.HiddenLayer = append(creature.BrainComponent.HiddenLayer, Axon{Weight: 1, Value: 0})
 
-	// Make creature size based on amount of stored food (will get updated when food changes)
+	// For discovering world bounds
+	tmxRawResource, err := engo.Files.Resource("world.tmx")
+	if err != nil {
+		panic(err)
+	}
+	tmxResource := tmxRawResource.(common.TMXResource)
+	levelData := tmxResource.Level
+	bounds := engo.Point{X: float32(levelData.Width() * levelData.TileWidth), Y: float32(levelData.Height() * levelData.TileHeight)}
+
+	// For calculating size based on food
+	diameter := creature.BrainComponent.Input["food"].Value * creatureSizeMultiplier
+
+	// Make creature size based on amount of stored food and put the creature at 0, 0 (we'll get a random position later)
 	creature.SpaceComponent = common.SpaceComponent{
-		Position: engo.Point{X: rand.Float32() * functionalBounds().X, Y: rand.Float32() * functionalBounds().Y},
-		Width:    creature.BrainComponent.Input["food"].Value * 5,
-		Height:   creature.BrainComponent.Input["food"].Value * 5,
+		Position: engo.Point{X: (rand.Float32() * (bounds.X - float32(levelData.TileWidth) - diameter)) + float32(levelData.TileWidth), Y: (rand.Float32() * (bounds.Y - float32(levelData.TileHeight) - diameter)) + float32(levelData.TileHeight)},
+		Width:    diameter,
+		Height:   diameter,
 	}
 
 	// Creatures should look like red circles
@@ -123,7 +136,7 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	}
 
 	// Make the creatures collide with the tiles and other creatures
-	creature.CollisionComponent = common.CollisionComponent{Solid: false}
+	creature.CollisionComponent = common.CollisionComponent{Solid: true}
 
 	creature.SetZIndex(2) // Z-Index 2 is reserved for creatures
 
@@ -140,14 +153,4 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	}
 
 	log.Println("Creature added.")
-}
-
-func functionalBounds() engo.Point {
-	tmxRawResource, err := engo.Files.Resource("world.tmx")
-	if err != nil {
-		panic(err)
-	}
-	tmxResource := tmxRawResource.(common.TMXResource)
-	levelData := tmxResource.Level
-	return engo.Point{X: float32(levelData.Width() * levelData.TileWidth), Y: float32(levelData.Height() * levelData.TileHeight)}
 }
