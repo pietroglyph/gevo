@@ -4,6 +4,8 @@ import (
 	"image/color"
 	"log"
 	"math/rand"
+	"sync"
+	"time"
 
 	"engo.io/ecs"
 	"engo.io/engo"
@@ -15,10 +17,11 @@ var (
 	networkOutputs                 = []string{"velocitydelta", "angledelta", "eat", "mate"}
 	hiddenLayerCount       int     = len(networkInputs) + len(networkOutputs)
 	creatureSizeMultiplier float32 = 5.0
+	wg                     sync.WaitGroup
 )
 
 // Creature is an entity upon which evolution is simulated
-// Creatures can collide, have a size, have a sprite,
+// Creatures can collide, have a size, and something to render,
 // and also have a "brain" which is a very simple 2-layer feedforward neural network.
 // The weights of this network are analogous to genetic information.
 type Creature struct {
@@ -45,7 +48,7 @@ type Axon struct {
 	Weight float32
 }
 
-// Brain component contains a simple 2-layer feedforward neural network
+// BrainComponent contains a simple 2-layer feedforward neural network
 type BrainComponent struct {
 	// Input is a map of unweighted values
 	Input map[string]Neuron
@@ -55,7 +58,7 @@ type BrainComponent struct {
 	Output map[string]Axon
 }
 
-// Ceature manager system satisfies interface ecs.System
+// CeatureManagerSystem ystem satisfies interface ecs.System
 type CreatureManagerSystem struct {
 	// Creatures is a Creature slice containing all the creatures in the world that should be managed
 	Creatures []*Creature
@@ -63,6 +66,13 @@ type CreatureManagerSystem struct {
 	MinCreatures int
 
 	world *ecs.World
+}
+
+func (c *Creature) think() {
+	defer wg.Done() // Decrement the WaitGroup when we're done
+	c.RenderComponent.Color = color.RGBA{0, 255, 255, 255}
+	log.Printf("Creature goroutine done.")
+	return
 }
 
 func (*CreatureManagerSystem) Remove(ecs.BasicEntity) {}
@@ -73,10 +83,19 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 			cm.spawnCreature()
 		}
 	}
+	for c := range cm.Creatures {
+		wg.Add(1)
+		creaturePtr := *cm.Creatures[c]
+		thinkf := creaturePtr.think
+		go thinkf()
+		creaturePtr.RenderComponent.Color = color.RGBA{9, 0, 31, 255}
+	}
+	wg.Wait()
 }
 
 func (cm *CreatureManagerSystem) New(world *ecs.World) {
 	cm.world = world
+	rand.Seed(time.Now().UTC().UnixNano()) // Use the current Unix time as a seed for our random numbers
 	log.Println("CreatureManagerSystem was added to the scene.")
 }
 
@@ -123,9 +142,24 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 
 	// Make creature size based on amount of stored food and put the creature at 0, 0 (we'll get a random position later)
 	creature.SpaceComponent = common.SpaceComponent{
-		Position: engo.Point{X: (rand.Float32() * (bounds.X - float32(levelData.TileWidth) - diameter)) + float32(levelData.TileWidth), Y: (rand.Float32() * (bounds.Y - float32(levelData.TileHeight) - diameter)) + float32(levelData.TileHeight)},
+		Position: engo.Point{X: rand.Float32(), Y: rand.Float32()},
 		Width:    diameter,
 		Height:   diameter,
+	}
+
+	// This stops overlap but pushes creatures to the center... FIXME?
+	if creature.SpaceComponent.Position.X < 0.5 { // If we're closer to the left and top walls then make sure the creatures aren't colliding with the walls
+		creature.SpaceComponent.Position.X *= bounds.X                     // Regular world bounds
+		creature.SpaceComponent.Position.X += float32(levelData.TileWidth) // Make sure we don't intersect with the top or left walls
+	} else { // Same but for the bottom and right walls (and the middle)
+		creature.SpaceComponent.Position.X *= bounds.X - float32(levelData.TileWidth) - diameter // Make sure we can't intersect with the bottom or right walls
+	}
+
+	if creature.SpaceComponent.Position.Y < 0.5 { // If we're closer to the left and top walls then make sure the creatures aren't colliding with the walls
+		creature.SpaceComponent.Position.Y *= bounds.Y                      // Regular world bounds
+		creature.SpaceComponent.Position.Y += float32(levelData.TileHeight) // Make sure we don't intersect with the top or left walls
+	} else { // Same but for the bottom and right walls (and the middle)
+		creature.SpaceComponent.Position.Y *= bounds.Y - float32(levelData.TileHeight) - diameter // Make sure we can't intersect with the bottom or right walls
 	}
 
 	// Creatures should look like red circles
@@ -151,6 +185,4 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 			sys.Add(&creature.BasicEntity, &creature.CollisionComponent, &creature.SpaceComponent)
 		}
 	}
-
-	log.Println("Creature added.")
 }

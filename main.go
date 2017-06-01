@@ -12,7 +12,7 @@ func main() {
 		Width:          1600,
 		Height:         1600,
 		StandardInputs: true,
-		MSAA:           0,
+		MSAA:           3,
 	}
 	engo.Run(opts, &scenes.MapScene{})
 }
