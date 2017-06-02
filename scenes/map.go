@@ -73,7 +73,7 @@ func (*MapScene) Setup(world *ecs.World) {
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
 	world.AddSystem(&common.MouseZoomer{zoomSpeed})                                                                // Use the scrollwheel to zoom in and out
 	world.AddSystem(&common.CollisionSystem{})                                                                     // Collide with stuff
-	world.AddSystem(&systems.CreatureManagerSystem{MinCreatures: 60})                                              // Add and manage creatures
+	world.AddSystem(&systems.CreatureManagerSystem{MinCreatures: 10000})                                           // Add and manage creatures
 	arolyFont := &common.Font{
 		URL:  "AROLY.ttf",
 		FG:   color.White,

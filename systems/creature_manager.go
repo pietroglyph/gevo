@@ -18,6 +18,7 @@ var (
 	hiddenLayerCount       int     = len(networkInputs) + len(networkOutputs)
 	creatureSizeMultiplier float32 = 5.0
 	wg                     sync.WaitGroup
+	elapsedTime            int
 )
 
 // Creature is an entity upon which evolution is simulated
@@ -36,7 +37,7 @@ type Creature struct {
 // Neuron has a single value field, and is meant to be used as an input
 // Thus, it is unweighted
 type Neuron struct {
-	// Value is the unweighted values of the neuron
+	// Value is the unweighted value of the neuron
 	Value float32
 }
 
@@ -70,8 +71,38 @@ type CreatureManagerSystem struct {
 
 func (c *Creature) think() {
 	defer wg.Done() // Decrement the WaitGroup when we're done
-	c.RenderComponent.Color = color.RGBA{0, 255, 255, 255}
-	log.Printf("Creature goroutine done.")
+
+	// Populate Input
+	for key := range c.BrainComponent.Input {
+		// We do this because doing c.BrainComponent.Input[key].Value is a double assignment if key doesn't exits, which Go doesn't allow
+		var val = c.BrainComponent.Input[key] // We're making a copy here where we first assure that key exists
+		val.Value = rand.Float32()            // Now we actually assign it
+		c.BrainComponent.Input[key] = val     // Populate with something random for now for benchmarking
+	}
+
+	// Populate HiddenLayer
+	for i := range c.BrainComponent.HiddenLayer {
+		var wSum float32
+		// Find the weighted sum of the Input layer
+		for key := range c.BrainComponent.Input {
+			wSum += c.BrainComponent.Input[key].Value * c.BrainComponent.HiddenLayer[i].Weight
+		}
+		c.BrainComponent.HiddenLayer[i].Value = wSum
+	}
+
+	// Populate Output
+	for key := range c.BrainComponent.Output {
+		var wSum float32
+		// Find the weighted sum of the HiddenLayer
+		for i := range c.BrainComponent.HiddenLayer {
+			wSum += c.BrainComponent.HiddenLayer[i].Value * c.BrainComponent.Output[key].Weight
+		}
+		// See the first loop for why we do this
+		var val = c.BrainComponent.Output[key]
+		val.Value = wSum
+		c.BrainComponent.Output[key] = val
+	}
+	log.Println(c.BrainComponent)
 	return
 }
 
@@ -88,9 +119,10 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 		creaturePtr := *cm.Creatures[c]
 		thinkf := creaturePtr.think
 		go thinkf()
-		creaturePtr.RenderComponent.Color = color.RGBA{9, 0, 31, 255}
+		creaturePtr.SpaceComponent.Position.X += 1
 	}
 	wg.Wait()
+	log.Println(dt)
 }
 
 func (cm *CreatureManagerSystem) New(world *ecs.World) {
@@ -110,7 +142,7 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	creature.BrainComponent.Input["food"] = Neuron{Value: float32(8.0)}
 	creature.BrainComponent.Input["const"] = Neuron{Value: float32(1.0)}
 
-	// We don't touch value because that gets set after spawning
+	// We don't touch Value because that gets set after spawning
 
 	// Outputs
 	for i := range networkOutputs {
