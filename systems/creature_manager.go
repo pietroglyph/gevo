@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	networkInputs                  = []string{"angle", "velocity", "foodstored", "const"}
+	networkInputs                  = []string{"angle", "foodstored", "vision", "const"}
 	networkOutputs                 = []string{"velocitydelta", "angledelta", "eat", "mate"}
 	hiddenLayerCount       int     = len(networkInputs) + len(networkOutputs)
 	creatureSizeMultiplier float32 = 5.0
@@ -65,8 +65,11 @@ type CreatureManagerSystem struct {
 	Creatures []*Creature
 	// MinCreatures is an integer that represents the number of creatures we should have to stop spawning in new ones
 	MinCreatures int
+	// PositionLine is used for resolving creature vision and angle
+	PositionLine *engo.Line
 
-	world *ecs.World
+	creaturesMux sync.Mutex
+	world        *ecs.World
 }
 
 func (c *Creature) think() {
@@ -76,8 +79,14 @@ func (c *Creature) think() {
 	for key := range c.BrainComponent.Input {
 		// We do this because doing c.BrainComponent.Input[key].Value is a double assignment if key doesn't exits, which Go doesn't allow
 		var val = c.BrainComponent.Input[key] // We're making a copy here where we first assure that key exists
-		val.Value = rand.Float32()            // Now we actually assign it
-		c.BrainComponent.Input[key] = val     // Populate with something random for now for benchmarking
+		switch key {
+		case "angle":
+		case "foodstored":
+		case "vision":
+		case "const":
+			val.Value = 1
+		}
+		c.BrainComponent.Input[key] = val
 	}
 
 	// Populate HiddenLayer
@@ -102,11 +111,18 @@ func (c *Creature) think() {
 		val.Value = wSum
 		c.BrainComponent.Output[key] = val
 	}
-	log.Println(c.BrainComponent)
 	return
 }
 
-func (*CreatureManagerSystem) Remove(ecs.BasicEntity) {}
+func (cm *CreatureManagerSystem) Remove(e ecs.BasicEntity) {
+	cm.creaturesMux.Lock()
+	defer cm.creaturesMux.Unlock()
+	for i := range cm.Creatures {
+		if cm.Creatures[i].ID() == e.ID() {
+			cm.Creatures = append(cm.Creatures[:i], cm.Creatures[i+1:]...) // Copy the slice without the element we want to delete back into our slice
+		}
+	}
+}
 
 func (cm *CreatureManagerSystem) Update(dt float32) {
 	if len(cm.Creatures) < cm.MinCreatures {
@@ -119,7 +135,6 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 		creaturePtr := *cm.Creatures[c]
 		thinkf := creaturePtr.think
 		go thinkf()
-		creaturePtr.SpaceComponent.Position.X += 1
 	}
 	wg.Wait()
 	log.Println(dt)
