@@ -33,7 +33,7 @@ type Axon struct {
 	Weight float32
 }
 
-// Brain component contains a simple 2-layer feedforward neural network
+// BrainComponent contains a simple 2-layer feedforward neural network
 type BrainComponent struct {
 	// Input is a map of unweighted values
 	Input map[string]Neuron

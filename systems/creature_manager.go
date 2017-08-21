@@ -3,6 +3,7 @@ package systems
 import (
 	"image/color"
 	"log"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -13,10 +14,13 @@ import (
 )
 
 var (
-	networkInputs                  = []string{"angle", "foodstored", "vision", "const"}
-	networkOutputs                 = []string{"velocitydelta", "angledelta", "eat", "mate"}
-	hiddenLayerCount       int     = len(networkInputs) + len(networkOutputs)
+	networkInputs                  = []string{"rotation", "storedfood", "vision", "const"}
+	networkOutputs                 = []string{"positiondelta", "rotationdelta", "eat", "mate"}
+	hiddenLayerCount               = len(networkInputs) + len(networkOutputs)
 	creatureSizeMultiplier float32 = 5.0
+	movementFoodCost       float32 = 0.002
+	rotationFoodCost       float32 = 0.0005
+	eatFoodCost            float32 = 0.0003
 	wg                     sync.WaitGroup
 	elapsedTime            int
 )
@@ -32,6 +36,7 @@ type Creature struct {
 	common.CollisionComponent
 	// BrainComponent contains a simple feedforward neural network
 	BrainComponent
+	StoredFood float32
 }
 
 // Neuron has a single value field, and is meant to be used as an input
@@ -59,30 +64,33 @@ type BrainComponent struct {
 	Output map[string]Axon
 }
 
-// CeatureManagerSystem ystem satisfies interface ecs.System
+// CreatureManagerSystem satisfies interface ecs.System
 type CreatureManagerSystem struct {
 	// Creatures is a Creature slice containing all the creatures in the world that should be managed
 	Creatures []*Creature
 	// MinCreatures is an integer that represents the number of creatures we should have to stop spawning in new ones
 	MinCreatures int
-	// PositionLine is used for resolving creature vision and angle
+	// PositionLine is used for resolving creature vision and rotation
 	PositionLine *engo.Line
 
 	creaturesMux sync.Mutex
 	world        *ecs.World
 }
 
-func (c *Creature) think() {
+func (c *Creature) think(cmSys *CreatureManagerSystem) {
 	defer wg.Done() // Decrement the WaitGroup when we're done
 
 	// Populate Input
 	for key := range c.BrainComponent.Input {
 		// We do this because doing c.BrainComponent.Input[key].Value is a double assignment if key doesn't exits, which Go doesn't allow
-		var val = c.BrainComponent.Input[key] // We're making a copy here where we first assure that key exists
+		var val = c.BrainComponent.Input[key] // We're making a copy here where we first assume that key exists
 		switch key {
-		case "angle":
-		case "foodstored":
+		case "rotation":
+			val.Value = c.Rotation
+		case "storedfood":
+			val.Value = c.StoredFood
 		case "vision":
+			val.Value = 0 // FIXME
 		case "const":
 			val.Value = 1
 		}
@@ -117,11 +125,14 @@ func (c *Creature) think() {
 func (cm *CreatureManagerSystem) Remove(e ecs.BasicEntity) {
 	cm.creaturesMux.Lock()
 	defer cm.creaturesMux.Unlock()
-	for i := range cm.Creatures {
-		if cm.Creatures[i].ID() == e.ID() {
-			cm.Creatures = append(cm.Creatures[:i], cm.Creatures[i+1:]...) // Copy the slice without the element we want to delete back into our slice
+	k := 0
+	for i, n := range cm.Creatures {
+		if cm.Creatures[i].ID() != e.ID() {
+			cm.Creatures[k] = n
+			k++
 		}
 	}
+	cm.Creatures = cm.Creatures[:k]
 }
 
 func (cm *CreatureManagerSystem) Update(dt float32) {
@@ -130,19 +141,44 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 			cm.spawnCreature()
 		}
 	}
-	for c := range cm.Creatures {
+	for _, v := range cm.Creatures {
 		wg.Add(1)
-		creaturePtr := *cm.Creatures[c]
-		thinkf := creaturePtr.think
-		go thinkf()
+		go v.think(cm)
 	}
 	wg.Wait()
-	log.Println(dt)
+	for _, v := range cm.Creatures {
+		// Update the current position and rotation based on the angle and position delta
+		delta := engo.Point{}
+		v.SpaceComponent.Rotation = addDegrees(v.SpaceComponent.Rotation, v.Output["rotationdelta"].Value)
+		delta.X = float32(math.Sin(float64(v.SpaceComponent.Rotation))) * (v.Output["positiondelta"].Value)
+		delta.Y = float32(math.Cos(float64(v.SpaceComponent.Rotation))) * (v.Output["positiondelta"].Value)
+		v.SpaceComponent.Position.Add(delta)
+		// Use food for everything that's being done, and eat
+		v.StoredFood -= v.Output["rotationdelta"].Value * rotationFoodCost
+		v.StoredFood -= v.Output["movementdelta"].Value * movementFoodCost
+		if v.Output["eat"].Value > 0 {
+			v.StoredFood -= v.Output["eat"].Value * eatFoodCost
+			v.StoredFood = 10
+		}
+		if v.StoredFood < 0.3 {
+			cm.Remove(v.BasicEntity)
+		}
+		diameter := v.StoredFood * creatureSizeMultiplier
+		v.Width = diameter
+		v.Height = diameter
+	}
 }
 
 func (cm *CreatureManagerSystem) New(world *ecs.World) {
 	cm.world = world
 	rand.Seed(time.Now().UTC().UnixNano()) // Use the current Unix time as a seed for our random numbers
+	engo.Mailbox.Listen("CollisionMessage", func(message engo.Message) {
+		t, isCollision := message.(common.CollisionMessage)
+		log.Println("test")
+		if isCollision {
+			log.Println("DEAD", t.Entity)
+		}
+	})
 	log.Println("CreatureManagerSystem was added to the scene.")
 }
 
@@ -178,14 +214,14 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	// For discovering world bounds
 	tmxRawResource, err := engo.Files.Resource("world.tmx")
 	if err != nil {
-		panic(err)
+		log.Panic(err.Error())
 	}
 	tmxResource := tmxRawResource.(common.TMXResource)
 	levelData := tmxResource.Level
 	bounds := engo.Point{X: float32(levelData.Width() * levelData.TileWidth), Y: float32(levelData.Height() * levelData.TileHeight)}
 
 	// For calculating size based on food
-	diameter := creature.BrainComponent.Input["food"].Value * creatureSizeMultiplier
+	diameter := creature.StoredFood * creatureSizeMultiplier
 
 	// Make creature size based on amount of stored food and put the creature at 0, 0 (we'll get a random position later)
 	creature.SpaceComponent = common.SpaceComponent{
@@ -232,4 +268,16 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 			sys.Add(&creature.BasicEntity, &creature.CollisionComponent, &creature.SpaceComponent)
 		}
 	}
+}
+
+func addDegrees(degrees float32, delta float32) float32 {
+	degrees += delta
+	if degrees > 360 {
+		factorOver := int(math.Ceil(float64(degrees))) / 360
+		degrees = degrees - float32(factorOver*360)
+	} else if degrees < 0 {
+		factorUnder := int(math.Ceil(math.Abs(float64(degrees)))) / 360
+		degrees += float32(factorUnder+1) * 360
+	}
+	return degrees
 }

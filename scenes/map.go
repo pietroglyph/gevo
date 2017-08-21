@@ -1,7 +1,6 @@
 package scenes
 
 import (
-	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -35,7 +34,7 @@ type tileEntity struct {
 // TileComponent holds all the tile's information relating to food
 type foodComponent struct {
 	waterDistance float64 // The distance in horizontal or vertical tiles from the current tile to a water tile (is 0 for water tiles)
-	foodStored    float64 // Maxes out at (1/waterDistance) * worldFertility, and goes lower when creature eats this tile
+	foodStored    float64 // Maxes out at (1 / waterDistance) * worldFertility, and goes lower when creature eats this tile
 	deadly        bool    // Should creatures lose food when on this tile
 }
 
@@ -44,7 +43,7 @@ var err error
 var (
 	scrollSpeed    float32 = 700.0
 	zoomSpeed      float32 = -0.1
-	worldFertility float64 = 4.0
+	worldFertility         = 4.0
 )
 
 // Type uniquely defines your game type
@@ -71,25 +70,9 @@ func (*MapScene) Setup(world *ecs.World) {
 	// Systems to make stuff actually happen in the world
 	world.AddSystem(&common.RenderSystem{})                                                                        // Render the game
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
-	world.AddSystem(&common.MouseZoomer{zoomSpeed})                                                                // Use the scrollwheel to zoom in and out
+	world.AddSystem(&common.MouseZoomer{ZoomSpeed: zoomSpeed})                                                     // Use the scrollwheel to zoom in and out
 	world.AddSystem(&common.CollisionSystem{})                                                                     // Collide with stuff
 	world.AddSystem(&systems.CreatureManagerSystem{MinCreatures: 100})                                             // Add and manage creatures
-	arolyFont := &common.Font{
-		URL:  "AROLY.ttf",
-		FG:   color.White,
-		Size: 128,
-	}
-
-	err = arolyFont.CreatePreloaded()
-	if err != nil {
-		panic(err)
-	}
-
-	titleLabel := label{BasicEntity: ecs.NewBasic()}
-	titleLabel.RenderComponent.Drawable = common.Text{
-		Font: arolyFont,
-		Text: "gevo",
-	}
 
 	tmxRawResource, err := engo.Files.Resource("world.tmx")
 	if err != nil {
@@ -145,7 +128,7 @@ func (*MapScene) Setup(world *ecs.World) {
 						}
 					}
 					if tile.foodComponent.waterDistance == 0.0 { // This shouldn't happen unless the tilemap is screwed up
-						panic(fmt.Errorf("No Water Layer in tilemap!"))
+						log.Fatal("No Water Layer in tilemap")
 					}
 					tile.foodComponent.deadly = false // Food certainly isn't deadly
 					tile.CollisionComponent = common.CollisionComponent{Solid: false}
@@ -196,8 +179,7 @@ func (*MapScene) Setup(world *ecs.World) {
 	for _, system := range world.Systems() {
 		switch sys := system.(type) {
 		case *common.RenderSystem:
-			sys.Add(&titleLabel.BasicEntity, &titleLabel.RenderComponent, &titleLabel.SpaceComponent) // Add the game title label
-			for _, v := range tileComponents {                                                        // Add all of the tiles/imageLayers
+			for _, v := range tileComponents { // Add all of the tiles/imageLayers
 				sys.Add(&v.BasicEntity, &v.RenderComponent, &v.SpaceComponent)
 			}
 		case *common.CollisionSystem:
