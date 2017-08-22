@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pietroglyph/gevo/util"
+
 	"engo.io/ecs"
 	"engo.io/engo"
 	"engo.io/engo/common"
@@ -67,17 +69,20 @@ type BrainComponent struct {
 // CreatureManagerSystem satisfies interface ecs.System
 type CreatureManagerSystem struct {
 	// Creatures is a Creature slice containing all the creatures in the world that should be managed
-	Creatures []*Creature
+	Creatures map[uint64]*Creature
+	// CreatureIDMap
 	// MinCreatures is an integer that represents the number of creatures we should have to stop spawning in new ones
 	MinCreatures int
 	// PositionLine is used for resolving creature vision and rotation
 	PositionLine *engo.Line
 
-	creaturesMux sync.Mutex
+	levelData    *common.Level
+	foodLayer    *common.TileLayer
+	creaturesMux sync.RWMutex
 	world        *ecs.World
 }
 
-func (c *Creature) think(cmSys *CreatureManagerSystem) {
+func (c *Creature) think() {
 	defer wg.Done() // Decrement the WaitGroup when we're done
 
 	// Populate Input
@@ -123,16 +128,7 @@ func (c *Creature) think(cmSys *CreatureManagerSystem) {
 }
 
 func (cm *CreatureManagerSystem) Remove(e ecs.BasicEntity) {
-	cm.creaturesMux.Lock()
-	defer cm.creaturesMux.Unlock()
-	k := 0
-	for i, n := range cm.Creatures {
-		if cm.Creatures[i].ID() != e.ID() {
-			cm.Creatures[k] = n
-			k++
-		}
-	}
-	cm.Creatures = cm.Creatures[:k]
+	delete(cm.Creatures, e.ID())
 }
 
 func (cm *CreatureManagerSystem) Update(dt float32) {
@@ -141,15 +137,17 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 			cm.spawnCreature()
 		}
 	}
+
 	for _, v := range cm.Creatures {
 		wg.Add(1)
-		go v.think(cm)
+		go v.think()
 	}
 	wg.Wait()
+
 	for _, v := range cm.Creatures {
 		// Update the current position and rotation based on the angle and position delta
 		delta := engo.Point{}
-		v.SpaceComponent.Rotation = addDegrees(v.SpaceComponent.Rotation, v.Output["rotationdelta"].Value)
+		v.SpaceComponent.Rotation = util.AddDegrees(v.SpaceComponent.Rotation, v.Output["rotationdelta"].Value)
 		delta.X = float32(math.Sin(float64(v.SpaceComponent.Rotation))) * (v.Output["positiondelta"].Value)
 		delta.Y = float32(math.Cos(float64(v.SpaceComponent.Rotation))) * (v.Output["positiondelta"].Value)
 		v.SpaceComponent.Position.Add(delta)
@@ -170,13 +168,42 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 }
 
 func (cm *CreatureManagerSystem) New(world *ecs.World) {
-	cm.world = world
-	rand.Seed(time.Now().UTC().UnixNano()) // Use the current Unix time as a seed for our random numbers
+	cm.world = world                          // So we can access world in cm.Update
+	rand.Seed(time.Now().UTC().UnixNano())    // Use the current Unix time as a seed for our random numbers
+	cm.Creatures = make(map[uint64]*Creature) // Make the Creatures map
+
+	// Get level data
+	tmxRawResource, err := engo.Files.Resource("world.tmx")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	tmxResource := tmxRawResource.(common.TMXResource)
+	cm.levelData = tmxResource.Level
+	for _, layer := range cm.levelData.TileLayers {
+		if layer.Name == "Food Layer" {
+			cm.foodLayer = layer
+		}
+	}
+	if cm.foodLayer == *common.TileLayer {
+		log.Fatal("Food Layer not found in tilemap.")
+	}
+
 	engo.Mailbox.Listen("CollisionMessage", func(message engo.Message) {
-		t, isCollision := message.(common.CollisionMessage)
-		log.Println("test")
-		if isCollision {
-			log.Println("DEAD", t.Entity)
+		m, ok := message.(common.CollisionMessage)
+		if !ok {
+			return
+		}
+
+		_, fromExists := cm.Creatures[m.Entity.ID()]
+		_, toExists := cm.Creatures[m.To.ID()]
+		if !fromExists || !toExists {
+			return
+		}
+		if cm.Creatures[m.Entity.ID()].Output["mate"].Value > 5 && cm.Creatures[m.To.ID()].Output["mate"].Value > 5 {
+			if rand.Float64() < 0.99 {
+				return
+			}
+			cm.spawnCreature() // TODO: Add genetic inheritance
 		}
 	})
 	log.Println("CreatureManagerSystem was added to the scene.")
@@ -211,14 +238,7 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	// Const neuron
 	creature.BrainComponent.HiddenLayer = append(creature.BrainComponent.HiddenLayer, Axon{Weight: 1, Value: 0})
 
-	// For discovering world bounds
-	tmxRawResource, err := engo.Files.Resource("world.tmx")
-	if err != nil {
-		log.Panic(err.Error())
-	}
-	tmxResource := tmxRawResource.(common.TMXResource)
-	levelData := tmxResource.Level
-	bounds := engo.Point{X: float32(levelData.Width() * levelData.TileWidth), Y: float32(levelData.Height() * levelData.TileHeight)}
+	bounds := engo.Point{X: float32(cm.levelData.Width() * cm.levelData.TileWidth), Y: float32(cm.levelData.Height() * cm.levelData.TileHeight)}
 
 	// For calculating size based on food
 	diameter := creature.StoredFood * creatureSizeMultiplier
@@ -232,17 +252,17 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 
 	// This stops overlap but pushes creatures to the center... FIXME?
 	if creature.SpaceComponent.Position.X < 0.5 { // If we're closer to the left and top walls then make sure the creatures aren't colliding with the walls
-		creature.SpaceComponent.Position.X *= bounds.X                     // Regular world bounds
-		creature.SpaceComponent.Position.X += float32(levelData.TileWidth) // Make sure we don't intersect with the top or left walls
+		creature.SpaceComponent.Position.X *= bounds.X                        // Regular world bounds
+		creature.SpaceComponent.Position.X += float32(cm.levelData.TileWidth) // Make sure we don't intersect with the top or left walls
 	} else { // Same but for the bottom and right walls (and the middle)
-		creature.SpaceComponent.Position.X *= bounds.X - float32(levelData.TileWidth) - diameter // Make sure we can't intersect with the bottom or right walls
+		creature.SpaceComponent.Position.X *= bounds.X - float32(cm.levelData.TileWidth) - diameter // Make sure we can't intersect with the bottom or right walls
 	}
 
 	if creature.SpaceComponent.Position.Y < 0.5 { // If we're closer to the left and top walls then make sure the creatures aren't colliding with the walls
-		creature.SpaceComponent.Position.Y *= bounds.Y                      // Regular world bounds
-		creature.SpaceComponent.Position.Y += float32(levelData.TileHeight) // Make sure we don't intersect with the top or left walls
+		creature.SpaceComponent.Position.Y *= bounds.Y                         // Regular world bounds
+		creature.SpaceComponent.Position.Y += float32(cm.levelData.TileHeight) // Make sure we don't intersect with the top or left walls
 	} else { // Same but for the bottom and right walls (and the middle)
-		creature.SpaceComponent.Position.Y *= bounds.Y - float32(levelData.TileHeight) - diameter // Make sure we can't intersect with the bottom or right walls
+		creature.SpaceComponent.Position.Y *= bounds.Y - float32(cm.levelData.TileHeight) - diameter // Make sure we can't intersect with the bottom or right walls
 	}
 
 	// Creatures should look like red circles
@@ -253,12 +273,15 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	}
 
 	// Make the creatures collide with the tiles and other creatures
-	creature.CollisionComponent = common.CollisionComponent{Solid: true}
+	creature.CollisionComponent = common.CollisionComponent{
+		Solid: true,
+		Main:  true,
+	}
 
 	creature.SetZIndex(2) // Z-Index 2 is reserved for creatures
 
 	// Append the creature to the Creatures slice so the System tracks it
-	cm.Creatures = append(cm.Creatures, creature)
+	cm.Creatures[creature.ID()] = creature
 
 	for _, system := range cm.world.Systems() {
 		switch sys := system.(type) {
@@ -270,14 +293,6 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	}
 }
 
-func addDegrees(degrees float32, delta float32) float32 {
-	degrees += delta
-	if degrees > 360 {
-		factorOver := int(math.Ceil(float64(degrees))) / 360
-		degrees = degrees - float32(factorOver*360)
-	} else if degrees < 0 {
-		factorUnder := int(math.Ceil(math.Abs(float64(degrees)))) / 360
-		degrees += float32(factorUnder+1) * 360
-	}
-	return degrees
+func (cm *CreatureManagerSystem) getFoodAt(x float32, y float32) {
+	cm.foodLayer.
 }

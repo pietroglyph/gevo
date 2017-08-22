@@ -18,6 +18,10 @@ type Creature struct {
 	BrainComponent
 }
 
+func (*Creature) Type() string {
+	return "CreatureEntity"
+}
+
 // Neuron has a single value field, and is meant to be used as an input
 // Thus, it is unweighted
 type Neuron struct {
