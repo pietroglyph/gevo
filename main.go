@@ -1,8 +1,6 @@
 package main
 
 import (
-	"github.com/pietroglyph/gevo/scenes"
-
 	"engo.io/engo"
 )
 
@@ -15,5 +13,5 @@ func main() {
 		MSAA:           3,
 		VSync:          true,
 	}
-	engo.Run(opts, &scenes.MapScene{})
+	engo.Run(opts, &MapScene{})
 }

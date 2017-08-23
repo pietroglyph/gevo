@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.0.0" orientation="orthogonal" renderorder="right-down" width="52" height="52" tilewidth="32" tileheight="32" nextobjectid="1">
+<map version="1.0" tiledversion="1.0.2" orientation="orthogonal" renderorder="right-down" width="100" height="100" tilewidth="32" tileheight="32" nextobjectid="1">
  <tileset firstgid="1" name="ts1" tilewidth="32" tileheight="32" tilecount="3" columns="3">
   <grid orientation="orthogonal" width="1" height="1"/>
   <image source="fulltiles.png" width="96" height="32"/>
  </tileset>
- <layer name="Collision Layer" width="52" height="52">
+ <layer name="Collision Layer" width="100" height="100">
   <data encoding="base64" compression="zlib">
-   eJztzwEJADAQxLCH+fc8G+FooAL67u6NtaIfWz+2fmz92Pqx9WPrx9aPrR9bP7Z+bP3Y+rH1Y+vH1o+tH1s/tn5s/dj6sfVj68fWj231Z6kPsnYCZQ==
+   eJzt0cEJACAQwLAD99/ZERQE6SOBTtA1M0uSpMf4y48WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aPGjxY8WP1r8aDn9kCTppg1SsRIB
   </data>
  </layer>
- <layer name="Water Layer" width="52" height="52">
+ <layer name="Water Layer" width="100" height="100">
   <data encoding="base64" compression="zlib">
-   eJzdlUsOxCAMQ6u5/6FHs6g0ixaS2A4GS2zafPwopNd1nj5Gi82TiXVk+fdYyXHlqea5sdy+qnluLLcvJDfidweeJ08jr2ymt1x0Fozej/IQptm+MepU8qv1GDzMc48wzXIqNRiqMEViZ/6UMynDFPUReaearU89oitSb9RHLQUPY5YiQlkiNbql5FklxJMTxy0mj4OQ83Iyj4sYPE5C7rQby09ddyBbO/ovf3qm5mHOmTfPnf9BlAdZCq3iUSnTx53lyWMmdgeeE5my8c5MmVhnnowyHndgQzxVv6GKnbG/KA+Li3leGDwoF7smi8eJaVY30le1pwx180TqK6RkifZhymn/dqhf6auYQx3qnENdYs+j1TwjDxU/q+5P1EPWT9e8Rn1E/bDPb1WdPLsxnaIvEioG7w==
+   eJztltFu6zAMQ4v9/0cPfRgwdGsTSyRF2TqAXy5uREknbvZ4DMMwDEOerznSMz68zvjwOuMDv7PM7hg1dz6rnOqDtZ+Mi0imopaDh2wvGdQ+0D11el/VeQ7vJnpHah8rmZE6ir6Yu7nbhzqvwgejR1a2Oq/aRzUd34FdXTwZH16ofVxlnu7jyfjwQu3jU+b4qPGRyR0f2uzVZ3YD9Z5GdjM+/hLxgfq7bHz8Be1jZUdV99KZSh//1WL024nV+a5cVNyPXZxEZnP20dlJdCZ3Hx2dROdhu0D56OQkMwdyB2wfHZxk+0fPfqoPRO+suXf3sdKv4vd+tW60Dwcfyt6YM3f3oe5HWT/aS5UPFxfuPhRU9KH2He3HzYcyj5kR7cnpu6HMq65/qo+q71L0uZ19sOfN1D7Jh+Jbma19io+7LjKZiLrjA5OLqqm4w3cZH/w7vAIzO+LjTjbasYsPRTbaB+POMe/wCqps1A4Zdw3ZXxZmbnR3XXygnbAysx5O9MHMZbnI1Gb2nIWZ6eiC7SPjhZ13sg/luQsz51QfGVx3xqzt6iI6F7N2Zx8ImJluPhh9Il2s9sKszfRR3esKzMxqH4p+0TAzK31kYLhA3dMMVT4QMO9eNDuL2geSHX18qu3u411G1kW1j6sMlA8W2b0gf4uRnOjj9/938/EpJ+uDTcbHnX+7ymPOebIPt/txlefqI5oX3anax6fMnXxkc5Q+stm7+UD8ZjB7WHlWASsP9T1l97PynAJG3l0XSh/v+lp5RgFjP44u3vW18owKZKbr3fhNJx/ZXHcXj8U+TvBRjbuP19xMvruLJ119RPpwd/Gkg4/XbOd9Zuni4zV/fHjMv6uHH7r62JWoj933UsX48CLrY7xgQfnYzUnFbKuZVz66O6mei+Gjk5O78yjmiuQ59R9htX/VXNEcpxmy/VQ6QWU4zILsQzkHo37Xubqe2YXXGR9eZxiGYRgQfAMtvBsj
   </data>
  </layer>
- <layer name="Food Layer" width="52" height="52">
+ <layer name="Food Layer" width="100" height="100">
   <data encoding="base64" compression="zlib">
-   eJzt09kRwzAIBFCn/6bTgIyAXVgsm5l8RRxPwtf1RWX8gF+mXmUgltVs6F1M8rDeV2WZ5GFYGB6vaXduimeVb83KNlm9kTfx3tMu0BkytZAZmCaGB7Wwdu8uB6mBWBCTddY7X6RfpWl3xjNjlcNrsqLCq3Qh+dWW6EzsXLWJmac2MXOe6FFbsrO9waN2MD1qA3rXUy3Zu85YMuetnNX/q6jwZOtHZr6LiR4kTvKwdjuyP2rL54n36zZFz0ffqNuU8UTznuBB3tOaEbUpPV1vO8Wi2FfWnnWZMr0rPKea1N9VlYfhmvItMXwd/bo8zPurdqk83v7qemrTBA9zT6Z4WCZGjU7Pbh5GjUmmSJzmeYLpxPgDomUGTg==
+   eJztlUluAkEQBPH/P235YAkhbHrJpao7Q5oLoqnKjJnh8QghhBBCCCHczNfgFfiMurjdiaKfWRduJ459VN2sunD4cO2k6GfHg9qHay9lPwgf1d4RqL1Q3YzuoZ63inpHZC/xUfdSZ2Tg7jA++Hve4oPhxN2hqp/4uMMH2om7vxN8IJ24+zvFB8qJu78qPhDdIHD3V8EHqh8E7v6q+5jpCIW7w1N8xMm+D2Q3aNxdslz8lw3ZCwN3p0oXHXzMzK9yreZBdsHG3THbxe5ZtY/Zfbq5+HSesc8u7r53cqtdKJy4e1/Jt/u76n1nqNw9a5bjHhqlmgf2PMd9NcNNLlQzVqniQjWzsgvkfu57Vemi87Oh6ufTvOou0DtW8cGexeQ0H+y8bE7xocir4AQfiswqbvQxO1dNfNTyMbsfujOHj5HZTlwuULPRuSvg8oGajcpciW4+dqnu4we1i5WZKG7ywZyLgO0aidrFzEwEnVw8o36nx0cdVM+H4n+pG+p34ejcGzn9v6kTuy5WOlM9ewwc/6FMH8p3IRL3e5vRmepdiKTSuxu5g+LZQ1PtHh39foVcaBT36c7vrc5WPHtIEB5O9qF2gvSB7GX2vCIfG7SL//Zmn1dkZFPRx/P3Z86rMrJgufhr75lzI5+5fLCcdPExel6dEw3bx+vOOzl3+lHecztU9YHuRZlxhxN8VMiJorOPShlRTrr6qJYR5cSxozK30kUXH697KjOrfex6ce2nyOpyER++XF19/LUjI6vbRWcfK3tUydPdx8ie7h5v8/FpV3ePN/p4t6+7v/jwzq/q4/Re4iMXwscv7hynXEjcWZi9dHOh3NvRh3v+Du5eWfkr7bKCu29W5qp7zVC53xW67v2Ozh6e6bjzCKfmCiGEEEIItfkGrwoTgA==
   </data>
  </layer>
 </map>

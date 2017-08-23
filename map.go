@@ -1,4 +1,4 @@
-package scenes
+package main
 
 import (
 	"image/color"
@@ -8,12 +8,14 @@ import (
 	"engo.io/ecs"
 	"engo.io/engo"
 	"engo.io/engo/common"
-	"github.com/pietroglyph/gevo/systems"
 	"github.com/pietroglyph/gevo/util"
 )
 
 // MapScene satisfies the Scene interface
-type MapScene struct{}
+type MapScene struct {
+	levelData    *common.Level
+	tileEntities map[engo.Point]*tileEntity
+}
 
 // Label entity holds labels
 type label struct {
@@ -31,7 +33,7 @@ type tileEntity struct {
 	foodComponent
 }
 
-// TileComponent holds all the tile's information relating to food
+// FoodComponent holds all the tile's information relating to food
 type foodComponent struct {
 	waterDistance float64 // The distance in horizontal or vertical tiles from the current tile to a water tile (is 0 for water tiles)
 	foodStored    float64 // Maxes out at (1 / waterDistance) * worldFertility, and goes lower when creature eats this tile
@@ -43,7 +45,7 @@ var err error
 var (
 	scrollSpeed    float32 = 700.0
 	zoomSpeed      float32 = -0.1
-	worldFertility         = 4.0
+	worldFertility         = 1.5
 )
 
 // Type uniquely defines your game type
@@ -62,8 +64,9 @@ func (*MapScene) Preload() {
 
 // Setup is called before the main loop starts. It allows you
 // to add entities and systems to your Scene.
-func (*MapScene) Setup(world *ecs.World) {
+func (ms *MapScene) Setup(world *ecs.World) {
 	log.Println("Preloading map scene.")
+
 	// Set the background color to green
 	common.SetBackground(color.White)
 
@@ -72,20 +75,20 @@ func (*MapScene) Setup(world *ecs.World) {
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
 	world.AddSystem(&common.MouseZoomer{ZoomSpeed: zoomSpeed})                                                     // Use the scrollwheel to zoom in and out
 	world.AddSystem(&common.CollisionSystem{})                                                                     // Collide with stuff
-	world.AddSystem(&systems.CreatureManagerSystem{MinCreatures: 100})                                             // Add and manage creatures
+	world.AddSystem(&CreatureManagerSystem{MapScene: ms, MinCreatures: 150})                                       // Add and manage creatures
 
 	tmxRawResource, err := engo.Files.Resource("world.tmx")
 	if err != nil {
 		panic(err)
 	}
 	tmxResource := tmxRawResource.(common.TMXResource)
-	levelData := tmxResource.Level
+	ms.levelData = tmxResource.Level
 
-	// Create render and space components for each of the tiles in all layers
-	tileComponents := make([]*tileEntity, 0)
+	// Make the map for the holding the actual tile entities and extra data
+	ms.tileEntities = make(map[engo.Point]*tileEntity, 0)
 
 	// Add all the actual tiles
-	for _, tileLayer := range levelData.TileLayers {
+	for _, tileLayer := range ms.levelData.TileLayers {
 		for _, tileElement := range tileLayer.Tiles {
 			if tileElement.Image != nil {
 				tile := &tileEntity{BasicEntity: ecs.NewBasic()}
@@ -106,7 +109,7 @@ func (*MapScene) Setup(world *ecs.World) {
 				case "Food Layer":
 					tile.RenderComponent.SetZIndex(0) // Lowest Z-Index but functionally the same as Z-Index 1
 					// Loop over the the Water Layer and find the closest water tiles (not dependent on Water Layer entities existing)
-					for _, layer := range levelData.TileLayers {
+					for _, layer := range ms.levelData.TileLayers {
 						if layer.Name == "Water Layer" {
 							var minDistance float64
 							for _, t := range layer.Tiles {
@@ -151,13 +154,17 @@ func (*MapScene) Setup(world *ecs.World) {
 					Height:   tileElement.Height(),
 				}
 
-				tileComponents = append(tileComponents, tile)
+				_, exists := ms.tileEntities[tileElement.Point]
+				if exists {
+					log.Println("Overlapping tiles detected at", tileElement.Point)
+				}
+				ms.tileEntities[tileElement.Point] = tile
 			}
 		}
 	}
 
 	// Do the same for all image layers (there probably won't be any in this case)
-	for _, imageLayer := range levelData.ImageLayers {
+	for _, imageLayer := range ms.levelData.ImageLayers {
 		for _, imageElement := range imageLayer.Images {
 			if imageElement.Image != nil {
 				tile := &tileEntity{BasicEntity: ecs.NewBasic()}
@@ -171,7 +178,7 @@ func (*MapScene) Setup(world *ecs.World) {
 					Height:   imageElement.Height(),
 				}
 
-				tileComponents = append(tileComponents, tile)
+				ms.tileEntities[imageElement.Point] = tile
 			}
 		}
 	}
@@ -179,13 +186,25 @@ func (*MapScene) Setup(world *ecs.World) {
 	for _, system := range world.Systems() {
 		switch sys := system.(type) {
 		case *common.RenderSystem:
-			for _, v := range tileComponents { // Add all of the tiles/imageLayers
+			for _, v := range ms.tileEntities { // Add all of the tiles/imageLayers
 				sys.Add(&v.BasicEntity, &v.RenderComponent, &v.SpaceComponent)
 			}
 		case *common.CollisionSystem:
-			for _, v := range tileComponents {
+			for _, v := range ms.tileEntities {
 				sys.Add(&v.BasicEntity, &v.CollisionComponent, &v.SpaceComponent)
 			}
 		}
 	}
+}
+
+func (ms *MapScene) getTileEntityAt(p engo.Point) *tileEntity {
+	closestTilePoint := engo.Point{}
+	closestTilePoint.X = float32((int(p.X) / ms.levelData.TileWidth) * ms.levelData.TileWidth)
+	closestTilePoint.Y = float32((int(p.Y) / ms.levelData.TileHeight) * ms.levelData.TileHeight)
+	_, exists := ms.tileEntities[closestTilePoint]
+	if !exists {
+		log.Println("Get of a nonexistant tile at", closestTilePoint)
+		return &tileEntity{foodComponent: foodComponent{deadly: true}} // Nonexistant tiles are deadly
+	}
+	return ms.tileEntities[closestTilePoint]
 }
