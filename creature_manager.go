@@ -3,12 +3,14 @@ package main
 import (
 	"image/color"
 	"log"
-	"math"
 	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/pietroglyph/gevo/chipecs"
 	"github.com/pietroglyph/gevo/util"
+	"github.com/vova616/chipmunk"
+	"github.com/vova616/chipmunk/vect"
 
 	"engo.io/ecs"
 	"engo.io/engo"
@@ -17,9 +19,10 @@ import (
 
 var (
 	networkInputs                  = []string{"rotation", "storedfood", "vision", "const"}
-	networkOutputs                 = []string{"positiondelta", "rotationdelta", "eat", "mate"}
+	networkOutputs                 = []string{"velocitydelta", "angledelta", "eat", "mate"}
 	hiddenLayerCount               = len(networkInputs) + len(networkOutputs)
 	creatureSizeMultiplier float32 = 4.0
+	massMultiplier         float32 = 5
 	baseFoodCost           float32 = 0.3
 	movementFoodCost       float32 = 0.4
 	rotationFoodCost       float32 = 0.1
@@ -37,7 +40,7 @@ type Creature struct {
 	ecs.BasicEntity
 	common.SpaceComponent
 	common.RenderComponent
-	common.CollisionComponent
+	chipecs.PhysicsComponent
 	// BrainComponent contains a simple feedforward neural network
 	BrainComponent
 	StoredFood float32
@@ -72,11 +75,8 @@ type BrainComponent struct {
 type CreatureManagerSystem struct {
 	// Creatures is a Creature slice containing all the creatures in the World that should be managed
 	Creatures map[uint64]*Creature
-	// CreatureIDMap
 	// MinCreatures is an integer that represents the number of creatures we should have to stop spawning in new ones
 	MinCreatures int
-	// PositionLine is used for resolving creature vision and rotation
-	PositionLine *engo.Line
 	// MapScene holds a pointer to the map scene
 	MapScene *MapScene
 
@@ -84,7 +84,7 @@ type CreatureManagerSystem struct {
 	World *ecs.World
 }
 
-func (c *Creature) think() {
+func (c *Creature) think(ms *MapScene) {
 	defer wg.Done() // Decrement the WaitGroup when we're done
 
 	// Populate Input
@@ -97,7 +97,7 @@ func (c *Creature) think() {
 		case "storedfood":
 			val.Value = c.StoredFood
 		case "vision":
-			val.Value = 0 // FIXME
+			val.Value = ms.getTileEntityAt(c.Position).foodStored
 		case "const":
 			val.Value = 1
 		}
@@ -144,19 +144,16 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 
 	for _, v := range cm.Creatures {
 		wg.Add(1)
-		go v.think()
+		go v.think(cm.MapScene)
 	}
 	wg.Wait()
 
 	for _, v := range cm.Creatures {
 		// Update the current position and rotation based on the angle and position delta
-		delta := engo.Point{}
-		v.SpaceComponent.Rotation = util.AddDegrees(v.SpaceComponent.Rotation, v.Output["rotationdelta"].Value)
-		delta.X = float32(math.Sin(float64(v.SpaceComponent.Rotation))) * (v.Output["positiondelta"].Value)
-		delta.Y = float32(math.Cos(float64(v.SpaceComponent.Rotation))) * (v.Output["positiondelta"].Value)
-		v.SpaceComponent.Position.Add(delta)
+		v.Body.AddAngle(v.Output["angledelta"].Value)
+		v.Body.AddAngularVelocity(v.Output["velocitydelta"].Value)
 		// Use food for everything that's being done, and eat
-		v.StoredFood -= v.Output["rotationdelta"].Value * rotationFoodCost
+		v.StoredFood -= v.Output["angledelta"].Value * rotationFoodCost
 		v.StoredFood -= v.Output["movementdelta"].Value * movementFoodCost
 		v.StoredFood -= baseFoodCost
 		if v.Output["eat"].Value > 0 {
@@ -216,7 +213,8 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	creature.BrainComponent.Output = make(map[string]Axon)
 
 	// Initalize select inputs
-	creature.BrainComponent.Input["food"] = Neuron{Value: float32(8.0)}
+	creature.StoredFood = 8
+	creature.BrainComponent.Input["food"] = Neuron{Value: creature.StoredFood}
 	creature.BrainComponent.Input["const"] = Neuron{Value: float32(1.0)}
 
 	// We don't touch Value because that gets set after spawning
@@ -271,11 +269,18 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 		Color:    color.RGBA{255, 0, 0, 255},
 	}
 
-	// Make the creatures collide with the tiles and other creatures
-	creature.CollisionComponent = common.CollisionComponent{
-		Solid: true,
-		Main:  true,
-	}
+	// Setup physics
+	shape := chipmunk.NewCircle(vect.Vector_Zero, diameter/2)
+	shape.SetElasticity(0.95)
+	shape.SetFriction(50)
+
+	mass := calculateMass(diameter)
+	body := chipmunk.NewBody(mass, shape.Moment(float32(mass)))
+	body.SetPosition(util.PntToVect(creature.Position))
+	body.SetAngle(vect.Float(creature.SpaceComponent.Rotation))
+	body.AddShape(shape)
+
+	creature.PhysicsComponent = chipecs.PhysicsComponent{Body: body}
 
 	creature.SetZIndex(2) // Z-Index 2 is reserved for creatures
 
@@ -286,8 +291,12 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 		switch sys := system.(type) {
 		case *common.RenderSystem:
 			sys.Add(&creature.BasicEntity, &creature.RenderComponent, &creature.SpaceComponent)
-		case *common.CollisionSystem:
-			sys.Add(&creature.BasicEntity, &creature.CollisionComponent, &creature.SpaceComponent)
+		case *chipecs.PhysicsSystem:
+			sys.Add(&creature.BasicEntity, &creature.PhysicsComponent, &creature.SpaceComponent)
 		}
 	}
+}
+
+func calculateMass(diameter float32) vect.Float {
+	return vect.Float(diameter * massMultiplier)
 }

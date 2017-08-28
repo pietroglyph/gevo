@@ -8,7 +8,10 @@ import (
 	"engo.io/ecs"
 	"engo.io/engo"
 	"engo.io/engo/common"
+	"github.com/pietroglyph/gevo/chipecs"
 	"github.com/pietroglyph/gevo/util"
+	"github.com/vova616/chipmunk"
+	"github.com/vova616/chipmunk/vect"
 )
 
 // MapScene satisfies the Scene interface
@@ -29,14 +32,14 @@ type tileEntity struct {
 	ecs.BasicEntity
 	common.RenderComponent
 	common.SpaceComponent
-	common.CollisionComponent
+	chipecs.PhysicsComponent
 	foodComponent
 }
 
 // FoodComponent holds all the tile's information relating to food
 type foodComponent struct {
-	waterDistance float64 // The distance in horizontal or vertical tiles from the current tile to a water tile (is 0 for water tiles)
-	foodStored    float64 // Maxes out at (1 / waterDistance) * worldFertility, and goes lower when creature eats this tile
+	waterDistance float32 // The distance in horizontal or vertical tiles from the current tile to a water tile (is 0 for water tiles)
+	foodStored    float32 // Maxes out at (1 / waterDistance) * worldFertility, and goes lower when creature eats this tile
 	deadly        bool    // Should creatures lose food when on this tile
 }
 
@@ -45,7 +48,7 @@ var err error
 var (
 	scrollSpeed    float32 = 700.0
 	zoomSpeed      float32 = -0.1
-	worldFertility         = 1.5
+	worldFertility float32 = 1.5
 )
 
 // Type uniquely defines your game type
@@ -71,11 +74,12 @@ func (ms *MapScene) Setup(world *ecs.World) {
 	common.SetBackground(color.White)
 
 	// Systems to make stuff actually happen in the world
+	physicsSystem := &chipecs.PhysicsSystem{}
 	world.AddSystem(&common.RenderSystem{})                                                                        // Render the game
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
 	world.AddSystem(&common.MouseZoomer{ZoomSpeed: zoomSpeed})                                                     // Use the scrollwheel to zoom in and out
-	world.AddSystem(&common.CollisionSystem{})                                                                     // Collide with stuff
-	world.AddSystem(&CreatureManagerSystem{MapScene: ms, MinCreatures: 150})                                       // Add and manage creatures
+	world.AddSystem(physicsSystem)                                                                                 // Collide with stuff
+	world.AddSystem(&CreatureManagerSystem{MapScene: ms, MinCreatures: 100})                                       // Add and manage creatures
 
 	tmxRawResource, err := engo.Files.Resource("world.tmx")
 	if err != nil {
@@ -87,6 +91,18 @@ func (ms *MapScene) Setup(world *ecs.World) {
 	// Make the map for the holding the actual tile entities and extra data
 	ms.tileEntities = make(map[engo.Point]*tileEntity, 0)
 
+	boundaries := []*chipmunk.Shape{
+		chipmunk.NewSegment(util.PntToVect(ms.levelData.Bounds().Min), vect.Vect{X: vect.Float(ms.levelData.Bounds().Max.X), Y: vect.Float(0)}, vect.Float(0)),
+		chipmunk.NewSegment(vect.Vect{X: vect.Float(ms.levelData.Bounds().Max.X), Y: vect.Float(0)}, util.PntToVect(ms.levelData.Bounds().Max), vect.Float(0)),
+		chipmunk.NewSegment(util.PntToVect(ms.levelData.Bounds().Max), vect.Vect{X: vect.Float(0), Y: vect.Float(ms.levelData.Bounds().Max.Y)}, vect.Float(0)),
+		chipmunk.NewSegment(vect.Vect{X: vect.Float(0), Y: vect.Float(ms.levelData.Bounds().Max.Y)}, util.PntToVect(ms.levelData.Bounds().Min), vect.Float(0)),
+	}
+	boundaryStaticBody := chipmunk.NewBodyStatic()
+	for _, segment := range boundaries {
+		segment.SetElasticity(0.6)
+		boundaryStaticBody.AddShape(segment)
+	}
+
 	// Add all the actual tiles
 	for _, tileLayer := range ms.levelData.TileLayers {
 		for _, tileElement := range tileLayer.Tiles {
@@ -94,29 +110,22 @@ func (ms *MapScene) Setup(world *ecs.World) {
 				tile := &tileEntity{BasicEntity: ecs.NewBasic()}
 
 				switch tileLayer.Name {
-				case "Collision Layer":
-					tile.RenderComponent.SetZIndex(3)    // Highest Z-Index, everything will pass under it
-					tile.foodComponent.foodStored = 0    // We can't eat this
-					tile.foodComponent.waterDistance = 0 // This value doesn't really matter for this layer
-					tile.foodComponent.deadly = false    // Creatures should collide with this tile, so this doesn't really matter
-					tile.CollisionComponent = common.CollisionComponent{Solid: true}
 				case "Water Layer":
 					tile.RenderComponent.SetZIndex(1) // Functionally the same as Z-Index 0 because all creatures are Z-index 2
 					tile.foodComponent.foodStored = 0 // We can't eat this
 					tile.foodComponent.deadly = true  // Creatures will drown here
 					tile.foodComponent.waterDistance = 0
-					tile.CollisionComponent = common.CollisionComponent{Solid: false}
 				case "Food Layer":
 					tile.RenderComponent.SetZIndex(0) // Lowest Z-Index but functionally the same as Z-Index 1
 					// Loop over the the Water Layer and find the closest water tiles (not dependent on Water Layer entities existing)
 					for _, layer := range ms.levelData.TileLayers {
 						if layer.Name == "Water Layer" {
-							var minDistance float64
+							var minDistance float32
 							for _, t := range layer.Tiles {
 								// We do all this to find an int representing the distance from a water tile to a food tile
 								// We're basically normalizing a vector
-								p := util.SubtractPoints(t.Point, tileElement.Point)                                             // Point
-								dist := math.Abs(float64(p.X/tileElement.Width())) + math.Abs(float64(p.Y/tileElement.Height())) // Float64
+								p := util.SubtractPoints(t.Point, tileElement.Point)
+								dist := float32(math.Abs(float64(p.X/tileElement.Width())) + math.Abs(float64(p.Y/tileElement.Height())))
 								// FIXME: Using t instead of tileElement causes a segfault, so we use tileElement instead... This could screw up if layers have different tile sizes
 								if dist <= minDistance || minDistance == 0.0 { // Check if this is closer than any other tiles we've seen
 									minDistance = dist
@@ -134,7 +143,6 @@ func (ms *MapScene) Setup(world *ecs.World) {
 						log.Fatal("No Water Layer in tilemap")
 					}
 					tile.foodComponent.deadly = false // Food certainly isn't deadly
-					tile.CollisionComponent = common.CollisionComponent{Solid: false}
 				}
 
 				tile.RenderComponent = common.RenderComponent{
@@ -189,10 +197,9 @@ func (ms *MapScene) Setup(world *ecs.World) {
 			for _, v := range ms.tileEntities { // Add all of the tiles/imageLayers
 				sys.Add(&v.BasicEntity, &v.RenderComponent, &v.SpaceComponent)
 			}
-		case *common.CollisionSystem:
-			for _, v := range ms.tileEntities {
-				sys.Add(&v.BasicEntity, &v.CollisionComponent, &v.SpaceComponent)
-			}
+		case *chipecs.PhysicsSystem:
+			entity := ecs.NewBasic()
+			physicsSystem.Add(&entity, &chipecs.PhysicsComponent{Body: boundaryStaticBody}, &common.SpaceComponent{})
 		}
 	}
 }

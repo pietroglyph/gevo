@@ -3,6 +3,8 @@ package util
 import (
 	"math"
 
+	"github.com/vova616/chipmunk/vect"
+
 	"engo.io/engo"
 )
 
@@ -29,4 +31,9 @@ func AddDegrees(degrees float32, delta float32) float32 {
 		degrees += float32(factorUnder+1) * 360
 	}
 	return degrees
+}
+
+// PntToVect converts a engo.Point to a vect.Vect
+func PntToVect(p engo.Point) vect.Vect {
+	return vect.Vect{X: vect.Float(p.X), Y: vect.Float(p.Y)}
 }

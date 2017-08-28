@@ -12,6 +12,7 @@ func main() {
 		StandardInputs: true,
 		MSAA:           3,
 		VSync:          true,
+		Fullscreen:     false,
 	}
 	engo.Run(opts, &MapScene{})
 }
