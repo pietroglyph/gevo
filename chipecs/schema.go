@@ -17,7 +17,7 @@ type PhysicsSystem struct {
 
 // PhysicsComponent holds physics data
 type PhysicsComponent struct {
-	Body *chipmunk.Body
+	Shape *chipmunk.Shape
 }
 
 type physicsEntity struct {

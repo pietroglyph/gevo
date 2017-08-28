@@ -17,7 +17,7 @@ func (ps *PhysicsSystem) Remove(basic ecs.BasicEntity) {
 	for index, e := range ps.entities {
 		if e.BasicEntity.ID() == basic.ID() {
 			delete = index
-			ps.Space.RemoveBody(e.Body)
+			ps.Space.RemoveBody(e.Shape.Body)
 			break
 		}
 	}
@@ -36,17 +36,17 @@ func (ps *PhysicsSystem) New(*ecs.World) {
 
 // Update is called once every frame
 func (ps *PhysicsSystem) Update(dt float32) {
-	ps.Space.Step(vect.Float(dt))
 	for _, e := range ps.entities {
-		pos := e.PhysicsComponent.Body.Position()
-		rot := e.PhysicsComponent.Body.Angle()
+		pos := e.PhysicsComponent.Shape.Body.Position()
+		rot := e.PhysicsComponent.Shape.Body.Angle()
 		e.Position = engo.Point{X: float32(pos.X), Y: float32(pos.Y)}
-		e.Rotation = float32(rot)
+		e.Rotation = float32(rot) * chipmunk.DegreeConst
 	}
+	ps.Space.Step(vect.Float(dt))
 }
 
 // Add adds a basic entity that has a physics and space component to the physics system
 func (ps *PhysicsSystem) Add(basic *ecs.BasicEntity, physics *PhysicsComponent, space *common.SpaceComponent) {
 	ps.entities = append(ps.entities, physicsEntity{basic, physics, space})
-	ps.Space.AddBody(physics.Body)
+	ps.Space.AddBody(physics.Shape.Body)
 }

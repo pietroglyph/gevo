@@ -198,8 +198,7 @@ func (ms *MapScene) Setup(world *ecs.World) {
 				sys.Add(&v.BasicEntity, &v.RenderComponent, &v.SpaceComponent)
 			}
 		case *chipecs.PhysicsSystem:
-			entity := ecs.NewBasic()
-			physicsSystem.Add(&entity, &chipecs.PhysicsComponent{Body: boundaryStaticBody}, &common.SpaceComponent{})
+			sys.Space.AddBody(boundaryStaticBody)
 		}
 	}
 }

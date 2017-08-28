@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"log"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -19,15 +20,15 @@ import (
 
 var (
 	networkInputs                  = []string{"rotation", "storedfood", "vision", "const"}
-	networkOutputs                 = []string{"velocitydelta", "angledelta", "eat", "mate"}
+	networkOutputs                 = []string{"velocitydelta", "angle", "eat", "mate"}
 	hiddenLayerCount               = len(networkInputs) + len(networkOutputs)
 	creatureSizeMultiplier float32 = 4.0
 	massMultiplier         float32 = 5
-	baseFoodCost           float32 = 0.3
-	movementFoodCost       float32 = 0.4
-	rotationFoodCost       float32 = 0.1
-	eatFoodCost            float32 = 0.2
-	deadlyTileFoodCost     float32 = 10
+	baseFoodCost           float32 = 0.15
+	movementFoodCost       float32 = 0.12
+	rotationFoodCost       float32 = 0.04
+	eatFoodCost            float32 = 0.1
+	deadlyTileFoodCost     float32 = 0.4
 	wg                     sync.WaitGroup
 	elapsedTime            int
 )
@@ -79,7 +80,6 @@ type CreatureManagerSystem struct {
 	MinCreatures int
 	// MapScene holds a pointer to the map scene
 	MapScene *MapScene
-
 	// World is used to keep track of game's world because we need it in update
 	World *ecs.World
 }
@@ -150,10 +150,14 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 
 	for _, v := range cm.Creatures {
 		// Update the current position and rotation based on the angle and position delta
-		v.Body.AddAngle(v.Output["angledelta"].Value)
-		v.Body.AddAngularVelocity(v.Output["velocitydelta"].Value)
-		// Use food for everything that's being done, and eat
-		v.StoredFood -= v.Output["angledelta"].Value * rotationFoodCost
+		v.Shape.Body.SetAngle(vect.Float(v.Output["angle"].Value))
+		velDelta := engo.Point{}
+		velDelta.X = float32(math.Sin(float64(v.Output["angle"].Value))) * (v.Output["velocitydelta"].Value)
+		velDelta.Y = float32(math.Cos(float64(v.Output["angle"].Value))) * (v.Output["velocitydelta"].Value)
+		v.Shape.Body.AddVelocity(velDelta.X, velDelta.Y)
+
+		// Use food for everything that's being done, and add food as well
+		v.StoredFood -= v.Output["angle"].Value * rotationFoodCost
 		v.StoredFood -= v.Output["movementdelta"].Value * movementFoodCost
 		v.StoredFood -= baseFoodCost
 		if v.Output["eat"].Value > 0 {
@@ -166,10 +170,14 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 		}
 		if v.StoredFood < 0.3 {
 			cm.World.RemoveEntity(v.BasicEntity)
+			continue
 		}
 		diameter := v.StoredFood * creatureSizeMultiplier
 		v.Width = diameter
 		v.Height = diameter
+		v.Shape.GetAsCircle().Radius = vect.Float(diameter / 2)
+		v.Shape.Body.SetMass(calculateMass(diameter))
+		v.Shape.Body.SetMoment(v.Shape.Moment(float32(calculateMass(diameter))))
 	}
 }
 
@@ -272,7 +280,6 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	// Setup physics
 	shape := chipmunk.NewCircle(vect.Vector_Zero, diameter/2)
 	shape.SetElasticity(0.95)
-	shape.SetFriction(50)
 
 	mass := calculateMass(diameter)
 	body := chipmunk.NewBody(mass, shape.Moment(float32(mass)))
@@ -280,7 +287,7 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	body.SetAngle(vect.Float(creature.SpaceComponent.Rotation))
 	body.AddShape(shape)
 
-	creature.PhysicsComponent = chipecs.PhysicsComponent{Body: body}
+	creature.PhysicsComponent = chipecs.PhysicsComponent{Shape: body.Shapes[0]}
 
 	creature.SetZIndex(2) // Z-Index 2 is reserved for creatures
 
