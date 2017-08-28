@@ -79,7 +79,7 @@ func (ms *MapScene) Setup(world *ecs.World) {
 	world.AddSystem(common.NewKeyboardScroller(scrollSpeed, engo.DefaultHorizontalAxis, engo.DefaultVerticalAxis)) // Use WASD to move the camera
 	world.AddSystem(&common.MouseZoomer{ZoomSpeed: zoomSpeed})                                                     // Use the scrollwheel to zoom in and out
 	world.AddSystem(physicsSystem)                                                                                 // Collide with stuff
-	world.AddSystem(&CreatureManagerSystem{MapScene: ms, MinCreatures: 100})                                       // Add and manage creatures
+	world.AddSystem(&CreatureManagerSystem{MapScene: ms, MinCreatures: 300})                                       // Add and manage creatures
 
 	tmxRawResource, err := engo.Files.Resource("world.tmx")
 	if err != nil {
@@ -91,6 +91,9 @@ func (ms *MapScene) Setup(world *ecs.World) {
 	// Make the map for the holding the actual tile entities and extra data
 	ms.tileEntities = make(map[engo.Point]*tileEntity, 0)
 
+	// Set up camera Bounds
+	common.CameraBounds = ms.levelData.Bounds()
+
 	boundaries := []*chipmunk.Shape{
 		chipmunk.NewSegment(util.PntToVect(ms.levelData.Bounds().Min), vect.Vect{X: vect.Float(ms.levelData.Bounds().Max.X), Y: vect.Float(0)}, vect.Float(0)),
 		chipmunk.NewSegment(vect.Vect{X: vect.Float(ms.levelData.Bounds().Max.X), Y: vect.Float(0)}, util.PntToVect(ms.levelData.Bounds().Max), vect.Float(0)),
@@ -100,6 +103,8 @@ func (ms *MapScene) Setup(world *ecs.World) {
 	boundaryStaticBody := chipmunk.NewBodyStatic()
 	for _, segment := range boundaries {
 		segment.SetElasticity(0.6)
+		segment.Shape().GetAsSegment().A.Sub(vect.Vect{X: vect.Float(ms.levelData.TileHeight), Y: vect.Float(ms.levelData.TileWidth)})
+		segment.Shape().GetAsSegment().B.Sub(vect.Vect{X: vect.Float(ms.levelData.TileHeight), Y: vect.Float(ms.levelData.TileWidth)})
 		boundaryStaticBody.AddShape(segment)
 	}
 

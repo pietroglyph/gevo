@@ -7,12 +7,14 @@ import (
 func main() {
 	opts := engo.RunOptions{
 		Title:          "gevo",
-		Width:          1600,
-		Height:         1600,
+		Width:          800,
+		Height:         800,
 		StandardInputs: true,
 		MSAA:           3,
 		VSync:          true,
 		Fullscreen:     false,
+		ScaleOnResize:  false,
+		NotResizable:   true,
 	}
 	engo.Run(opts, &MapScene{})
 }

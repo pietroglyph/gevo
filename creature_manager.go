@@ -19,14 +19,14 @@ import (
 )
 
 var (
-	networkInputs                  = []string{"rotation", "storedfood", "vision", "const"}
+	networkInputs                  = []string{"angle", "storedfood", "vision", "const"}
 	networkOutputs                 = []string{"velocitydelta", "angle", "eat", "mate"}
 	hiddenLayerCount               = len(networkInputs) + len(networkOutputs)
-	creatureSizeMultiplier float32 = 4.0
+	creatureSizeMultiplier float32 = 10.0
 	massMultiplier         float32 = 5
-	baseFoodCost           float32 = 0.15
+	baseFoodCost           float32 = 0.14
 	movementFoodCost       float32 = 0.12
-	rotationFoodCost       float32 = 0.04
+	angleFoodCost          float32 = 0.04
 	eatFoodCost            float32 = 0.1
 	deadlyTileFoodCost     float32 = 0.4
 	wg                     sync.WaitGroup
@@ -92,8 +92,8 @@ func (c *Creature) think(ms *MapScene) {
 		// We do this because doing c.BrainComponent.Input[key].Value is a double assignment if key doesn't exits, which Go doesn't allow
 		var val = c.BrainComponent.Input[key] // We're making a copy here where we first assume that key exists
 		switch key {
-		case "rotation":
-			val.Value = c.Rotation
+		case "angle":
+			val.Value = float32(c.Shape.Body.Angle())
 		case "storedfood":
 			val.Value = c.StoredFood
 		case "vision":
@@ -149,24 +149,17 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 	wg.Wait()
 
 	for _, v := range cm.Creatures {
-		// Update the current position and rotation based on the angle and position delta
-		v.Shape.Body.SetAngle(vect.Float(v.Output["angle"].Value))
-		velDelta := engo.Point{}
-		velDelta.X = float32(math.Sin(float64(v.Output["angle"].Value))) * (v.Output["velocitydelta"].Value)
-		velDelta.Y = float32(math.Cos(float64(v.Output["angle"].Value))) * (v.Output["velocitydelta"].Value)
-		v.Shape.Body.AddVelocity(velDelta.X, velDelta.Y)
-
 		// Use food for everything that's being done, and add food as well
-		v.StoredFood -= v.Output["angle"].Value * rotationFoodCost
+		v.StoredFood -= v.Output["angle"].Value * angleFoodCost
 		v.StoredFood -= v.Output["movementdelta"].Value * movementFoodCost
 		v.StoredFood -= baseFoodCost
+		tileUnder := cm.MapScene.getTileEntityAt(v.SpaceComponent.Center())
+		if tileUnder.deadly {
+			v.StoredFood -= deadlyTileFoodCost
+		}
 		if v.Output["eat"].Value > 0 {
 			v.StoredFood -= v.Output["eat"].Value * eatFoodCost
-			tileUnder := cm.MapScene.getTileEntityAt(v.SpaceComponent.Center())
 			v.StoredFood += float32(tileUnder.foodStored)
-			if tileUnder.deadly {
-				v.StoredFood -= deadlyTileFoodCost
-			}
 		}
 		if v.StoredFood < 0.3 {
 			cm.World.RemoveEntity(v.BasicEntity)
@@ -175,9 +168,16 @@ func (cm *CreatureManagerSystem) Update(dt float32) {
 		diameter := v.StoredFood * creatureSizeMultiplier
 		v.Width = diameter
 		v.Height = diameter
-		v.Shape.GetAsCircle().Radius = vect.Float(diameter / 2)
+		v.Shape.GetAsCircle().Radius = vect.Float(v.Width / 2)
 		v.Shape.Body.SetMass(calculateMass(diameter))
 		v.Shape.Body.SetMoment(v.Shape.Moment(float32(calculateMass(diameter))))
+
+		// Update the current position and angle based on the angle and position delta
+		v.Shape.Body.SetAngle(vect.Float(v.Output["angle"].Value))
+		velDelta := engo.Point{}
+		velDelta.X = float32(math.Sin(float64(v.Output["angle"].Value))) * (v.Output["velocitydelta"].Value)
+		velDelta.Y = float32(math.Cos(float64(v.Output["angle"].Value))) * (v.Output["velocitydelta"].Value)
+		v.Shape.Body.AddVelocity(velDelta.X, velDelta.Y)
 	}
 }
 
@@ -274,17 +274,17 @@ func (cm *CreatureManagerSystem) spawnCreature() {
 	creature.RenderComponent = common.RenderComponent{
 		Drawable: common.Circle{},
 		Scale:    engo.Point{X: 1, Y: 1},
-		Color:    color.RGBA{255, 0, 0, 255},
+		Color:    color.RGBA{255, 0, 0, 200},
 	}
 
 	// Setup physics
 	shape := chipmunk.NewCircle(vect.Vector_Zero, diameter/2)
-	shape.SetElasticity(0.95)
+	shape.SetElasticity(0)
 
 	mass := calculateMass(diameter)
 	body := chipmunk.NewBody(mass, shape.Moment(float32(mass)))
 	body.SetPosition(util.PntToVect(creature.Position))
-	body.SetAngle(vect.Float(creature.SpaceComponent.Rotation))
+	body.SetAngle(vect.Float(0))
 	body.AddShape(shape)
 
 	creature.PhysicsComponent = chipecs.PhysicsComponent{Shape: body.Shapes[0]}

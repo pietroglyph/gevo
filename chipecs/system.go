@@ -38,9 +38,8 @@ func (ps *PhysicsSystem) New(*ecs.World) {
 func (ps *PhysicsSystem) Update(dt float32) {
 	for _, e := range ps.entities {
 		pos := e.PhysicsComponent.Shape.Body.Position()
-		rot := e.PhysicsComponent.Shape.Body.Angle()
 		e.Position = engo.Point{X: float32(pos.X), Y: float32(pos.Y)}
-		e.Rotation = float32(rot) * chipmunk.DegreeConst
+		e.Rotation = 0 // Engo rotates around the origin, not the center, so we don't want to set this
 	}
 	ps.Space.Step(vect.Float(dt))
 }
